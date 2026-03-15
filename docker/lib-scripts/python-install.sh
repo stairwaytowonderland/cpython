@@ -5,22 +5,21 @@
 # Pipepail (set -o pipefail) is not available in sh
 set -e
 
+LEVEL='ƒ' $LOGGER "Installing Python utilities..."
+
 VERSION="${PYTHON_VERSION:-latest}"
 PYTHON_VERSION="$VERSION"
-PYTHON_INSTALL_PATH="${PYTHON_INSTALL_PATH:-/usr/local/python}"
-INSTALL_PATH="${INSTALL_PATH:-"${PYTHON_INSTALL_PATH}/${VERSION}"}"
+PYTHON_INSTALL_PREFIX="${PYTHON_INSTALL_PREFIX:-/opt}"
+PYTHON_INSTALL_PREFIX="${PYTHON_INSTALL_PREFIX%/}"
+PYTHON_INSTALL_SUFFIX="${PYTHON_INSTALL_SUFFIX:-python}"
+PYTHON_INSTALL_SUFFIX="${PYTHON_INSTALL_SUFFIX#/}"
+PYTHON_INSTALL_PATH="${PYTHON_INSTALL_PATH:-"${PYTHON_INSTALL_PREFIX}/${PYTHON_INSTALL_SUFFIX}"}"
+
+PACKAGE_CLEANUP="${PACKAGE_CLEANUP:-true}"
+PYTHON_MINIMAL="${PYTHON_MINIMAL:-true}"
 
 # shellcheck disable=SC1090
 . "$INSTALL_HELPER"
-
-updaterc() {
-    case "$(cat "${2:-/etc/bash.bashrc}")" in
-        *"$1"*) ;;
-        *) printf '\n%s\n' "$1" >> "${2:-/etc/bash.bashrc}" ;;
-    esac
-}
-
-get_major_minor_version() { echo "$1" | cut -d. -f1,2; }
 
 download_cpython_version() {
     LEVEL='*' $LOGGER "Downloading Python version ${1}..."
@@ -58,7 +57,11 @@ install_cpython() {
             exit 1
         fi
         install_packages "${PYTHON_BUILD_DEPENDENCIES# }"
-        ./configure --prefix="$INSTALL_PATH" --with-ensurepip=install --enable-optimizations
+
+        LEVEL='*' $LOGGER "Configuring and building Python ${VERSION}..."
+        LEVEL='*' $LOGGER "Installation prefix: ${PYTHON_INSTALL_PREFIX}"
+        LEVEL='*' $LOGGER "Library directory: ${PYTHON_LIBDIR}"
+        ./configure --prefix="$PYTHON_INSTALL_PREFIX" --libdir="$PYTHON_LIBDIR" --with-ensurepip=install --enable-optimizations
         make -j 8
         make install
         cd "$cwd" && rm -rf "$DOWNLOAD_DIR"
@@ -67,27 +70,25 @@ install_cpython() {
         remove_packages "${PYTHON_BUILD_DEPENDENCIES# }"
 
         # Strip unnecessary files to reduce image size
-        if [ "$BUILD_CLEANUP" = "true" ]; then
-            find "$INSTALL_PATH" -type d -name 'test' -exec rm -rf {} + 2> /dev/null || true
-            find "$INSTALL_PATH" -type d -name '__pycache__' -exec rm -rf {} + 2> /dev/null || true
-            find "$INSTALL_PATH" -name '*.pyc' -delete
-            find "$INSTALL_PATH" -name '*.pyo' -delete
-            rm -rf "$INSTALL_PATH"/lib/python*/config-*
-            rm -rf "$INSTALL_PATH"/lib/*.a
+        find "$PYTHON_INSTALL_PATH" -type d -name 'test' -exec rm -rf {} + 2> /dev/null || true
+        find "$PYTHON_INSTALL_PATH" -type d -name '__pycache__' -exec rm -rf {} + 2> /dev/null || true
+        find "$PYTHON_INSTALL_PATH" -type f -name '*.pyc' -delete
+        find "$PYTHON_INSTALL_PATH" -type f -name '*.pyo' -delete
+        find "$PYTHON_INSTALL_PATH"/python* -name 'config-*' -exec rm -rf {} + 2> /dev/null || true
+
+        if [ "$PYTHON_MINIMAL" = "true" ]; then
+            find "$PYTHON_INSTALL_PATH" -type f -name '*.a' -delete
         fi
     fi
 }
-
-LEVEL='ƒ' $LOGGER "Installing Python utilities..."
 
 ESSENTIAL_PACKAGES="${ESSENTIAL_PACKAGES% } $(
     cat << EOF
 build-essential
 ca-certificates
-curl
+wget
 gcc
 git
-jq
 make
 tar
 xz-utils
@@ -112,9 +113,6 @@ EOF
 )"
 
 install_python() {
-    PACKAGE_CLEANUP="${PACKAGE_CLEANUP:-true}"
-    BUILD_CLEANUP="${BUILD_CLEANUP:-true}"
-
     for pkg in $ESSENTIAL_PACKAGES; do
         if ! dpkg -s "$pkg" > /dev/null 2>&1; then
             PACKAGES_TO_INSTALL="${PACKAGES_TO_INSTALL% } $pkg"
@@ -130,18 +128,14 @@ install_python() {
     major_version=$(get_major_version "$VERSION")
     major_minor_version=$(get_major_minor_version "$VERSION")
 
+    INSTALL_PATH="${INSTALL_PATH:-"${PYTHON_INSTALL_PATH}/python${major_minor_version}"}"
+
     install_cpython "$VERSION"
 
-    updaterc "if [[ \"\${PATH}\" != *\"${INSTALL_PATH}/bin\"* ]]; then export \"PATH=${INSTALL_PATH}/bin:\${PATH}\"; fi"
-    updaterc "PYTHON_VERSION=${VERSION}"
-    {
-        echo "PYTHON_VERSION=${VERSION}"
-        echo "PYTHON_INSTALL_PATH=${INSTALL_PATH}"
-        echo "PATH=${INSTALL_PATH}/bin:${PATH}"
-    } >> /etc/environment
+    updaterc "if [[ \"\${PATH}\" != *\"${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=${PYTHON_INSTALL_PREFIX}/bin:\${PATH}\"; fi"
 
-    PYTHON_SRC_ACTUAL="${INSTALL_PATH}/bin/python${major_minor_version}"
-    PATH="${INSTALL_PATH}/bin:${PATH}"
+    PYTHON_SRC_ACTUAL="${PYTHON_INSTALL_PREFIX}/bin/python${major_minor_version}"
+    PATH="${PYTHON_INSTALL_PREFIX}/bin:${PATH}"
 
     cat >> "${PYTHON_INSTALL_PATH}/.manifest" << EOF
 {"path":"${PYTHON_SRC_ACTUAL}","url":"${DOWNLOAD_URL}","version":"${VERSION}","major_version":"${major_version}","major_minor_version":"${major_minor_version}"}
@@ -149,20 +143,18 @@ EOF
 }
 
 create_setup() {
-    LEVEL='*' $LOGGER "Creating configuration script for Python ${PYTHON_VERSION}..."
+    LEVEL='*' "$LOGGER" "Creating configuration script for Python ${PYTHON_VERSION}..."
 
     # shellcheck disable=SC2154
-    touch "${PYTHON_INSTALL_PATH}/setup" \
-        && chmod +x "${PYTHON_INSTALL_PATH}/setup" \
-        && cat > "${PYTHON_INSTALL_PATH}/setup" << EOF
+    touch "${PYTHON_LIBDIR}/setup" \
+        && chmod +x "${PYTHON_LIBDIR}/setup" \
+        && cat > "${PYTHON_LIBDIR}/setup" << EOF
 #!/bin/sh
-set -e
-
-LEVEL='*' $LOGGER "Setting up alternatives for Python ${PYTHON_VERSION}..."
+LEVEL='*' "$LOGGER" "Setting up alternatives for Python ${PYTHON_VERSION}..."
 
 VERSION="$VERSION"
 PYTHON_VERSION="$PYTHON_VERSION"
-PYTHON_INSTALL_PATH="$PYTHON_INSTALL_PATH"
+PYTHON_INSTALL_PREFIX="$PYTHON_INSTALL_PREFIX"
 INSTALL_PATH="$INSTALL_PATH"
 INSTALL_TOOLS="\${INSTALL_TOOLS:-false}"
 
@@ -175,19 +167,18 @@ major_minor_version=\$(get_major_minor_version "\$VERSION")
 SYSTEM_PYTHON="\$(command -v "/usr/bin/python\${major_version}" || true)"
 ALTERNATIVES_PATH="\${ALTERNATIVES_PATH:-/usr/local/bin}"
 
-\$LOGGER "Creating symbolic links for Python binaries and libraries..."
+"$LOGGER" "Creating symbolic links for Python binaries and libraries..."
 for py in python pip idle pydoc; do
-    [ -e "\${INSTALL_PATH}/bin/\${py}" ] || ln -s "\${INSTALL_PATH}/bin/\${py}\${major_version}" "\${INSTALL_PATH}/bin/\${py}"
+    [ -e "\${PYTHON_INSTALL_PREFIX}/bin/\${py}" ] || ln -s "\${PYTHON_INSTALL_PREFIX}/bin/\${py}\${major_version}" "\${PYTHON_INSTALL_PREFIX}/bin/\${py}"
 done
-[ -e "\${INSTALL_PATH}/bin/python-config" ] || ln -s "\${INSTALL_PATH}/bin/python\${major_version}-config" "\${INSTALL_PATH}/bin/python-config"
-ln -s "\${PYTHON_INSTALL_PATH}/\${PYTHON_VERSION}" "/usr/local/lib/python\${major_minor_version}"
+[ -e "\${PYTHON_INSTALL_PREFIX}/bin/python-config" ] || ln -s "\${PYTHON_INSTALL_PREFIX}/bin/python\${major_version}-config" "\${PYTHON_INSTALL_PREFIX}/bin/python-config"
 
-updaterc "if [[ \"\\\${PATH}\" != *\"\${INSTALL_PATH}/bin\"* ]]; then export \"PATH=\${INSTALL_PATH}/bin:\\\${PATH}\"; fi"
+updaterc "if [[ \"\\\${PATH}\" != *\"\${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=\${PYTHON_INSTALL_PREFIX}/bin:\\\${PATH}\"; fi"
 updaterc "PYTHON_VERSION=\${VERSION}"
 {
-    echo "PYTHON_VERSION=\${VERSION}"
-    echo "PYTHON_INSTALL_PATH=\${INSTALL_PATH}"
-    echo "PATH=\${INSTALL_PATH}/bin:\${PATH}"
+    echo "PYTHON_VERSION=\"\${VERSION}\""
+    echo "PYTHON_INSTALL_PREFIX=\"\${INSTALL_PATH}\""
+    echo "PATH=\"\${PYTHON_INSTALL_PREFIX}/bin:\${PATH}\""
 } >> /etc/environment
 
 for py in python pip idle pydoc; do
@@ -196,8 +187,8 @@ for py in python pip idle pydoc; do
     syspy="\$(readlink -f "\${SYSTEM_PYTHON%/bin/python*}/bin/\${py}\${major_version}")"
     [ ! -x "\$syspy" ] || update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}\${major_version}" "\${py}\${major_version}" "\$syspy" "\$priority" && priority="\$((priority + 1))"
     {
-        update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}" "\${py}" "\${INSTALL_PATH}/bin/\${py}" "\$priority"
-        update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}\${major_version}" "\${py}\${major_version}" "\${INSTALL_PATH}/bin/\${py}\${major_version}" "\$priority"
+        update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}" "\${py}" "\${PYTHON_INSTALL_PREFIX}/bin/\${py}" "\$priority"
+        update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}\${major_version}" "\${py}\${major_version}" "\${PYTHON_INSTALL_PREFIX}/bin/\${py}\${major_version}" "\$priority"
     } && priority="\$((priority + 1))"
 done
 for py in python-config python\${major_version}-config; do
@@ -205,8 +196,10 @@ for py in python-config python\${major_version}-config; do
     priority=\$((\$( get_alternatives_priority "\$py") + 1))
     [ "\$priority" -ge 0 ] || priority=\$((priority + 1))
     [ ! -x "\$syspy" ] || update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}" "\${py}" "\$syspy" "\$priority" && priority="\$((priority + 1))"
-    update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}" "\${py}" "\${INSTALL_PATH}/bin/\${py}" "\$priority" && priority="\$((priority + 1))"
+    update-alternatives --install "\${ALTERNATIVES_PATH}/\${py}" "\${py}" "\${PYTHON_INSTALL_PREFIX}/bin/\${py}" "\$priority" && priority="\$((priority + 1))"
 done
+
+LEVEL='√' "$LOGGER" "Python \${PYTHON_VERSION} setup complete. Installed at \${INSTALL_PATH}."
 EOF
 }
 
@@ -217,3 +210,5 @@ main() {
 }
 
 main "$@"
+
+LEVEL='√' $LOGGER "Done! Python ${VERSION} installed at ${INSTALL_PATH}."

@@ -139,9 +139,16 @@ __check_semver() {
 # (see `find_version_from_git_tags`, below)
 __rest_call() {
     if [ -n "$API_TOKEN" ]; then
-        curl -fsSL --include "$1" -H "${GITHUB_API_HEADER_ACCEPT}" -H "Authorization: token ${API_TOKEN}"
+        # curl -fsSL --include "$1" -H "${GITHUB_API_HEADER_ACCEPT}" -H "Authorization: token ${API_TOKEN}"
+        wget -q --save-headers -O- \
+            --header="${GITHUB_API_HEADER_ACCEPT}" \
+            --header="Authorization: token ${API_TOKEN}" \
+            "$1"
     else
-        curl -fsSL --include "$1" -H "${GITHUB_API_HEADER_ACCEPT}"
+        # curl -fsSL --include "$1" -H "${GITHUB_API_HEADER_ACCEPT}"
+        wget -q --save-headers -O- \
+            --header="${GITHUB_API_HEADER_ACCEPT}" \
+            "$1"
     fi
 }
 
@@ -160,7 +167,7 @@ __rest_github_tags_paged() {
 
         # Extract the 'Link' header for the next page URL
         # https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api?apiVersion=2022-11-28
-        next_url=$(echo "$response" | grep -F 'link: <' | sed -e 's/link: <\([^>]*\)>.*rel="next".*/\1/' -e 't' -e 'd')
+        next_url=$(echo "$response" | grep -Fi 'link: <' | sed -e 's/[Ll]ink: <\([^>]*\)>.*rel="next".*/\1/' -e 't' -e 'd')
 
         URL="$next_url"
         page=$((page + 1))
@@ -273,9 +280,22 @@ __install_from_tarball() {
 
     mkdir -p "$INSTALL_PREFIX"
     LEVEL='*' $LOGGER "Downloading from $DOWNLOAD_URL ..."
+    # (
+    #     set -x
+    #     curl -fsSL "$DOWNLOAD_URL" | tar -C "$INSTALL_PREFIX" -"xv${tar_opts}f" -
+    # )
+    # (
+    #     set -x
+    #     wget -qO- "$DOWNLOAD_URL" | tar -C "$INSTALL_PREFIX" -"xv${tar_opts}f" -
+    # )
     (
         set -x
-        curl -fsSL "$DOWNLOAD_URL" | tar -C "$INSTALL_PREFIX" -"xv${tar_opts}f" -
+        _tmpfile="$(mktemp)"
+        wget -q -O "$_tmpfile" "$DOWNLOAD_URL" \
+            && tar -C "$INSTALL_PREFIX" -"xv${tar_opts}f" "$_tmpfile"
+        _rc=$?
+        rm -f "$_tmpfile"
+        return $_rc
     )
 }
 
@@ -288,9 +308,15 @@ __install_from_package() {
     }
 
     LEVEL='*' $LOGGER "Downloading from $DOWNLOAD_URL ..."
+    # (
+    #     set -x
+    #     curl -fsOSL "$DOWNLOAD_URL" \
+    #         && dpkg -i "${DOWNLOAD_URL##*/}" \
+    #         && rm -f "${DOWNLOAD_URL##*/}"
+    # )
     (
         set -x
-        curl -fsOSL "$DOWNLOAD_URL" \
+        wget -q "$DOWNLOAD_URL" \
             && dpkg -i "${DOWNLOAD_URL##*/}" \
             && rm -f "${DOWNLOAD_URL##*/}"
     )

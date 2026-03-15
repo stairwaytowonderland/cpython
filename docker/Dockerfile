@@ -1,7 +1,10 @@
 ARG PARENT_IMAGE=ubuntu
 ARG PYTHON_VERSION=latest
 ARG INSTALL_TOOLS=false
-ARG PYTHON_INSTALL_PATH=/usr/local/python
+ARG PYTHON_INSTALL_PREFIX=/usr/local
+ARG PYTHON_INSTALL_SUFFIX=lib
+ARG PYTHON_INSTALL_PATH=${PYTHON_INSTALL_PREFIX%/}/${PYTHON_INSTALL_SUFFIX#/}
+ARG PYTHON_LIBDIR="${PYTHON_INSTALL_PATH%/lib}/lib"
 ARG LOGGER=/usr/local/bin/logger.sh
 ARG PIP_INSTALL=/usr/local/bin/pip-install.sh
 ARG INSTALL_HELPER=/usr/local/bin/install-helper.sh
@@ -9,8 +12,11 @@ FROM $PARENT_IMAGE AS pybuilder
 
 ARG PARENT_IMAGE
 ARG PYTHON_VERSION
-ARG INSTALL_TOOLS
+ARG PYTHON_INSTALL_PREFIX
+ARG PYTHON_INSTALL_SUFFIX
 ARG PYTHON_INSTALL_PATH
+ARG PYTHON_LIBDIR
+ARG INSTALL_TOOLS
 ARG LOGGER
 ARG PIP_INSTALL
 ARG INSTALL_HELPER
@@ -20,8 +26,6 @@ ARG REMOVE_ONLY=true
 ARG PIP_INSTALL_FLAGS="--no-cache-dir --disable-pip-version-check --ignore-installed --break-system-packages --root-user-action=ignore"
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV INSTALL_PATH=$PYTHON_INSTALL_PATH/$PYTHON_VERSION
-ENV PATH=$INSTALL_PATH/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Prevent Python from writing .pyc files (keeps source code directories free of __pycache__ folders and .pyc files)
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -38,30 +42,41 @@ USER root
 
 RUN /tmp/lib-scripts/python-install.sh \
   # Cleanup build dependencies but keep the Python installation
-  && rm -rf $INSTALL_PATH/include/* \
+  && rm -rf ${PYTHON_INSTALL_PREFIX%/}/include/* \
+  # && find "$PYTHON_INSTALL_PREFIX/include" -mindepth 1 -maxdepth 1 -exec rm -rf {} \; \
   && apt-get clean -y \
   && apt-get -y autoremove \
   && rm -rf /var/lib/apt/lists/*
 
-RUN touch $PIP_INSTALL \
+RUN set -a; . /etc/environment \
+    && touch $PIP_INSTALL \
     && chmod +x $PIP_INSTALL \
     && cat > $PIP_INSTALL <<EOF
 #!/bin/sh
 set -e
-VERSION="\$(cat "${INSTALL_PATH}/.manifest" | jq -r '.major_minor_version')"
 pip_install() {
-  "$INSTALL_PATH/bin/python\${VERSION}" -m pip install $PIP_INSTALL_FLAGS "\$@"
+  "${PYTHON_INSTALL_PREFIX%/}/bin/python${PYTHON_VERSION%.*}" -m pip install $PIP_INSTALL_FLAGS "\$@"
 }
 pip_install "\$@"
 EOF
+
+RUN $PIP_INSTALL --upgrade pip \
+    # setuptools wheel \
+  && for tool in pipx poetry uv; do \
+    LEVEL='*' $LOGGER "Installing $tool..." \
+      && { [ "$INSTALL_TOOLS" != "true" ] || $PIP_INSTALL "$tool"; } \
+      || LEVEL='error' $LOGGER "Failed to install $tool"; \
+  done \
+  && $PYTHON_INSTALL_PATH/setup \
+  && rm -rf /tmp/*
 
 
 FROM $PARENT_IMAGE AS base
 
 ARG PARENT_IMAGE \
     PYTHON_VERSION \
-    INSTALL_TOOLS \
     PYTHON_INSTALL_PATH \
+    INSTALL_TOOLS \
     LOGGER \
     PIP_INSTALL \
     INSTALL_HELPER \
@@ -74,13 +89,12 @@ ARG PARENT_IMAGE \
 
 ENV TZ=$TIMEZONE \
     DEBIAN_FRONTEND=noninteractive \
-    PATH=$PYTHON_INSTALL_PATH/$PYTHON_VERSION/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     # Prevent Python from writing .pyc files (keeps source code directories free of __pycache__ folders and .pyc files)
     PYTHONDONTWRITEBYTECODE=1 \
     # Ensure Python output is sent straight to the terminal without buffering (important for logging)
     PYTHONUNBUFFERED=1
 
-COPY --from=pybuilder $LOGGER $PIP_INSTALL $INSTALL_HELPER /usr/local/bin/
+COPY --from=pybuilder $LOGGER $PIP_INSTALL $INSTALL_HELPER /usr/local/bin /usr/local/bin/
 COPY --from=pybuilder $PYTHON_INSTALL_PATH $PYTHON_INSTALL_PATH
 
 USER root
@@ -88,7 +102,6 @@ USER root
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
     ca-certificates \
-    curl \
     jq \
 		tini \
   && if [ "$PARENT_IMAGE" = "ubuntu" ]; then \
@@ -104,7 +117,7 @@ RUN apt-get update \
     fi; \
   fi \
   && apt-get -s dist-upgrade | grep "^Inst" | grep -i securi | cut -d " " -f 2 | xargs apt-get install -y --no-install-recommends \
-  && /usr/local/python/setup \
+  && $PYTHON_INSTALL_PATH/setup \
 	# Cleanup
   && rm -rf /tmp/* \
 	&& apt-get clean -y \
@@ -120,7 +133,6 @@ USER $USERNAME
 WORKDIR /home/$USERNAME
 
 
-# ---------------------------------------------------------
 FROM base AS appbuilder
 
 USER root
@@ -133,11 +145,11 @@ WORKDIR /src
 RUN [ ! -f requirements.txt ] || $PIP_INSTALL -r requirements.txt
 
 
-# ---------------------------------------------------------
 FROM base AS devcontainer
 
 ARG USERNAME=vscode
 
+COPY --from=pybuilder /usr/local/bin /usr/local/bin/
 COPY --from=appbuilder $PYTHON_INSTALL_PATH $PYTHON_INSTALL_PATH
 
 USER root
@@ -175,13 +187,13 @@ RUN python3 -m venv /opt/venv \
 	&& echo '. /opt/venv/bin/activate' >> /home/$USERNAME/.bashrc
 
 
-# ---------------------------------------------------------
 FROM base AS app
 
 USER $USERNAME
 WORKDIR /app
 
 # Copy Python installation from the builder stage
+COPY --from=pybuilder /usr/local/bin /usr/local/bin/
 COPY --from=appbuilder $PYTHON_INSTALL_PATH $PYTHON_INSTALL_PATH
 # Copy application code
 # COPY --chown=$USERNAME:$USERNAME src/ .
@@ -191,11 +203,10 @@ COPY --from=appbuilder $PYTHON_INSTALL_PATH $PYTHON_INSTALL_PATH
 EXPOSE "${BIND_ADDR##*:}"
 
 # dockerfile-utils: ignore
-# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-# 	CMD curl -f http://localhost/"${BIND_ADDR##*:}"/gtg || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+	CMD wget -qO- http://localhost/"${BIND_ADDR##*:}"/gtg || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Run the application (e.g. with gunicorn)
 # CMD ["gunicorn", "-c", "gunicorn.py", "api:app"]
-# ---------------------------------------------------------
