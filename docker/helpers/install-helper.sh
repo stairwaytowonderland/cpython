@@ -59,9 +59,11 @@ get_patch_version() { echo "$1" | cut -d. -f3; }
 get_major_minor_version() { echo "$1" | cut -d. -f1,2; }
 
 updaterc() {
-    case "$(cat "${2:-/etc/bash.bashrc}")" in
+    newline="${2-}"
+    if [ "$newline" = "true" ]; then newline="\n"; else unset newline; fi
+    case "$(cat "${3:-/etc/bash.bashrc}")" in
         *"$1"*) ;;
-        *) printf '\n%s\n' "$1" >> "${2:-/etc/bash.bashrc}" ;;
+        *) printf '%b%s\n' "$newline" "$1" >> "${3:-/etc/bash.bashrc}" ;;
     esac
 }
 
@@ -88,21 +90,11 @@ update_and_install() {
     install_packages "$@"
 }
 
+# shellcheck disable=SC2086
 remove_packages() {
-    PACKAGE_CLEANUP="${PACKAGE_CLEANUP:-true}"
-    REMOVE_ONLY="${REMOVE_ONLY:-false}"
-    if [ "$PACKAGE_CLEANUP" != "true" ] && [ "$REMOVE_ONLY" != "true" ]; then
-        LEVEL='warn' $LOGGER "Cleanup is disabled. Skipping package removal: ""$*"
-        return
-    fi
-    # shellcheck disable=SC2086
     LEVEL='*' $LOGGER "Removing the following packages: "$*
-    # shellcheck disable=SC2086,SC2048
+    # shellcheck disable=SC2048
     apt-get -y remove $*
-    if [ "$REMOVE_ONLY" != "true" ]; then
-        LEVEL='*' $LOGGER "Autoremoving packages..."
-        apt-get -y autoremove
-    fi
 }
 
 # Usage example for defining packages to install:

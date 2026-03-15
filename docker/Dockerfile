@@ -2,9 +2,7 @@ ARG PARENT_IMAGE=ubuntu
 ARG PYTHON_VERSION=latest
 ARG INSTALL_TOOLS=false
 ARG PYTHON_INSTALL_PREFIX=/usr/local
-ARG PYTHON_INSTALL_SUFFIX=lib
-ARG PYTHON_INSTALL_PATH=${PYTHON_INSTALL_PREFIX%/}/${PYTHON_INSTALL_SUFFIX#/}
-ARG PYTHON_LIBDIR="${PYTHON_INSTALL_PATH%/lib}/lib"
+ARG PYTHON_INSTALL_PATH=${PYTHON_INSTALL_PREFIX%/}/lib
 ARG LOGGER=/usr/local/bin/logger.sh
 ARG PIP_INSTALL=/usr/local/bin/pip-install.sh
 ARG INSTALL_HELPER=/usr/local/bin/install-helper.sh
@@ -15,18 +13,15 @@ ARG PYTHON_VERSION
 ARG PYTHON_INSTALL_PREFIX
 ARG PYTHON_INSTALL_SUFFIX
 ARG PYTHON_INSTALL_PATH
-ARG PYTHON_LIBDIR
 ARG INSTALL_TOOLS
 ARG LOGGER
 ARG PIP_INSTALL
 ARG INSTALL_HELPER
 
-ARG PACKAGE_CLEANUP=true
-ARG REMOVE_ONLY=true
 ARG PIP_INSTALL_FLAGS="--no-cache-dir --disable-pip-version-check --ignore-installed --break-system-packages --root-user-action=ignore"
 
+# Set non-interactive mode for apt-get to avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-
 # Prevent Python from writing .pyc files (keeps source code directories free of __pycache__ folders and .pyc files)
 ENV PYTHONDONTWRITEBYTECODE=1
 # Ensure Python output is sent straight to the terminal without buffering (important for logging)
@@ -88,6 +83,7 @@ ARG PARENT_IMAGE \
     BIND_ADDR=0.0.0.0:8000
 
 ENV TZ=$TIMEZONE \
+    # Set non-interactive mode for apt-get to avoid prompts during package installation
     DEBIAN_FRONTEND=noninteractive \
     # Prevent Python from writing .pyc files (keeps source code directories free of __pycache__ folders and .pyc files)
     PYTHONDONTWRITEBYTECODE=1 \

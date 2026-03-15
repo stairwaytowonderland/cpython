@@ -9,13 +9,9 @@ LEVEL='ƒ' $LOGGER "Installing Python utilities..."
 
 VERSION="${PYTHON_VERSION:-latest}"
 PYTHON_VERSION="$VERSION"
-PYTHON_INSTALL_PREFIX="${PYTHON_INSTALL_PREFIX:-/opt}"
-PYTHON_INSTALL_PREFIX="${PYTHON_INSTALL_PREFIX%/}"
-PYTHON_INSTALL_SUFFIX="${PYTHON_INSTALL_SUFFIX:-python}"
-PYTHON_INSTALL_SUFFIX="${PYTHON_INSTALL_SUFFIX#/}"
-PYTHON_INSTALL_PATH="${PYTHON_INSTALL_PATH:-"${PYTHON_INSTALL_PREFIX}/${PYTHON_INSTALL_SUFFIX}"}"
+PYTHON_INSTALL_PREFIX="${PYTHON_INSTALL_PREFIX:-/opt/python}"
+PYTHON_INSTALL_PATH="${PYTHON_INSTALL_PATH:-"${PYTHON_INSTALL_PREFIX%/}/lib"}"
 
-PACKAGE_CLEANUP="${PACKAGE_CLEANUP:-true}"
 PYTHON_MINIMAL="${PYTHON_MINIMAL:-true}"
 
 # shellcheck disable=SC1090
@@ -61,7 +57,9 @@ install_cpython() {
         LEVEL='*' $LOGGER "Configuring and building Python ${VERSION}..."
         LEVEL='*' $LOGGER "Installation prefix: ${PYTHON_INSTALL_PREFIX}"
         LEVEL='*' $LOGGER "Library directory: ${PYTHON_LIBDIR}"
-        ./configure --prefix="$PYTHON_INSTALL_PREFIX" --libdir="$PYTHON_LIBDIR" --with-ensurepip=install --enable-optimizations
+        _configure_libdir="${PYTHON_LIBDIR:+--libdir="$PYTHON_LIBDIR"}"
+        # shellcheck disable=SC2086
+        ./configure --prefix="$PYTHON_INSTALL_PREFIX" ${_configure_libdir} --with-ensurepip=install --enable-optimizations
         make -j 8
         make install
         cd "$cwd" && rm -rf "$DOWNLOAD_DIR"
@@ -90,8 +88,6 @@ wget
 gcc
 git
 make
-tar
-xz-utils
 EOF
 )"
 
@@ -129,10 +125,11 @@ install_python() {
     major_minor_version=$(get_major_minor_version "$VERSION")
 
     INSTALL_PATH="${INSTALL_PATH:-"${PYTHON_INSTALL_PATH}/python${major_minor_version}"}"
+    PYTHON_LIBDIR="${PYTHON_INSTALL_PATH%/lib}/lib"
 
     install_cpython "$VERSION"
 
-    updaterc "if [[ \"\${PATH}\" != *\"${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=${PYTHON_INSTALL_PREFIX}/bin:\${PATH}\"; fi"
+    updaterc "if [[ \"\${PATH}\" != *\"${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=${PYTHON_INSTALL_PREFIX}/bin:\${PATH}\"; fi" true
 
     PYTHON_SRC_ACTUAL="${PYTHON_INSTALL_PREFIX}/bin/python${major_minor_version}"
     PATH="${PYTHON_INSTALL_PREFIX}/bin:${PATH}"
@@ -173,12 +170,18 @@ for py in python pip idle pydoc; do
 done
 [ -e "\${PYTHON_INSTALL_PREFIX}/bin/python-config" ] || ln -s "\${PYTHON_INSTALL_PREFIX}/bin/python\${major_version}-config" "\${PYTHON_INSTALL_PREFIX}/bin/python-config"
 
-updaterc "if [[ \"\\\${PATH}\" != *\"\${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=\${PYTHON_INSTALL_PREFIX}/bin:\\\${PATH}\"; fi"
-updaterc "PYTHON_VERSION=\${VERSION}"
+updaterc "if [[ \"\\\${PATH}\" != *\"\${PYTHON_INSTALL_PREFIX}/bin\"* ]]; then export \"PATH=\${PYTHON_INSTALL_PREFIX}/bin:\\\${PATH}\"; fi" true
+(
+    set -a; . /etc/environment; set +a
+    case ":\${PATH}:" in
+        *":\${PYTHON_INSTALL_PREFIX}/bin:"*) ;;
+        *) printf 'PATH="%s/bin:%s"\n' "\${PYTHON_INSTALL_PREFIX}" "\${PATH}" >> /etc/environment ;;
+    esac
+)
+updaterc "PYTHON_VERSION=\${VERSION}" true
 {
     echo "PYTHON_VERSION=\"\${VERSION}\""
     echo "PYTHON_INSTALL_PREFIX=\"\${INSTALL_PATH}\""
-    echo "PATH=\"\${PYTHON_INSTALL_PREFIX}/bin:\${PATH}\""
 } >> /etc/environment
 
 for py in python pip idle pydoc; do
