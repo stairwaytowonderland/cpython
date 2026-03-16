@@ -47,7 +47,7 @@ DOCKER_TARGET=${DOCKER_TARGET:-"base"}
 if [ -d "$last_arg" ]; then
     RUN_CONTEXT="$last_arg"
 else
-    RUN_CONTEXT="${RUN_CONTEXT:-"${script_dir}/../../.."}"
+    RUN_CONTEXT="${RUN_CONTEXT:-"${script_dir}/../.."}"
 fi
 if [ ! -d "$RUN_CONTEXT" ]; then
     echo "(!) Docker context directory not found at expected path: ${RUN_CONTEXT}" >&2
@@ -65,13 +65,13 @@ IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 
 REMOTE_HUB="${REMOTE_HUB-}"
 if [ -n "$REMOTE_HUB" ]; then
-    docker_tag="${REMOTE_HUB}/${IMAGE_NAME}:${DOCKER_TARGET}"
+    docker_tag="${REMOTE_HUB}/${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
 else
     tag_suffix="${BASE_IMAGE_VARIANT}"
     # Append image version if not 'latest'
     [ "$IMAGE_VERSION" = "latest" ] || tag_suffix="${tag_suffix}-${IMAGE_VERSION}"
 
-    tag_prefix="${IMAGE_NAME}:${DOCKER_TARGET}"
+    tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
     # Append base image name if variant is 'latest'
     [ "$BASE_IMAGE_VARIANT" != "latest" ] || tag_prefix="${tag_prefix}-${BASE_IMAGE_NAME}"
 

@@ -1,4 +1,7 @@
-ARG PARENT_IMAGE=ubuntu
+# Must be debian-based image
+ARG IMAGE_NAME=ubuntu
+ARG VARIANT=${VARIANT:-latest}
+ARG PARENT_IMAGE=${IMAGE_NAME}:${VARIANT}
 ARG PYTHON_VERSION=latest
 ARG INSTALL_TOOLS=false
 ARG PYTHON_INSTALL_PREFIX=/usr/local
@@ -8,10 +11,10 @@ ARG PIP_INSTALL=/usr/local/bin/pip-install.sh
 ARG INSTALL_HELPER=/usr/local/bin/install-helper.sh
 FROM $PARENT_IMAGE AS pybuilder
 
+ARG IMAGE_NAME
 ARG PARENT_IMAGE
 ARG PYTHON_VERSION
 ARG PYTHON_INSTALL_PREFIX
-ARG PYTHON_INSTALL_SUFFIX
 ARG PYTHON_INSTALL_PATH
 ARG INSTALL_TOOLS
 ARG LOGGER
@@ -72,9 +75,7 @@ RUN $PIP_INSTALL --upgrade pip \
 
 FROM $PARENT_IMAGE AS base
 
-ARG PARENT_IMAGE \
-    PYTHON_VERSION \
-    PYTHON_INSTALL_PATH \
+ARG PYTHON_INSTALL_PATH \
     INSTALL_TOOLS \
     LOGGER \
     PIP_INSTALL \
@@ -105,16 +106,16 @@ RUN apt-get update \
     jq \
     openssl \
 		tini \
-  && if [ "$PARENT_IMAGE" = "ubuntu" ]; then \
+  && if [ "$IMAGE_NAME" = "ubuntu" ]; then \
     # As of Ubuntu 24 (Noble Numbat), the Ubuntu base image comes with a non-root user ubuntu with UID 1000.
     # Delete this user to avoid conflicts when creating our own non-root user.
     # Use 'userdel' to perform a shallow delete, and preserve htpasswd/group integrity for UID and GID.
     if id "ubuntu" >/dev/null 2>&1; then \
-      $LOGGER "Deleting user 'ubuntu' for $PARENT_IMAGE" \
+      $LOGGER "Deleting user 'ubuntu' for $IMAGE_NAME" \
         && userdel -r -f ubuntu > /dev/null 2>&1 \
-        || LEVEL=error $LOGGER "Failed to delete ubuntu user for $PARENT_IMAGE"; \
+        || LEVEL=error $LOGGER "Failed to delete ubuntu user for $IMAGE_NAME"; \
     else \
-      $LOGGER "User 'ubuntu' does not exist for $PARENT_IMAGE"; \
+      $LOGGER "User 'ubuntu' does not exist for $IMAGE_NAME"; \
     fi; \
   fi \
   && apt-get -s dist-upgrade | grep "^Inst" | grep -i securi | cut -d " " -f 2 | xargs apt-get install -y --no-install-recommends \

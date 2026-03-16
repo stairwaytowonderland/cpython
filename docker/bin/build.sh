@@ -2,7 +2,7 @@
 # shellcheck disable=SC1091
 
 # ./docker/bin/build.sh \
-#   starter-project \
+#   cpython \
 #   --build-arg USERNAME=vscode \
 #   --build-arg PYTHON_VERSION=devcontainer \
 #   --no-cache
@@ -65,7 +65,7 @@ FILEZ_TARGET="${FILEZ_TARGET:-filez}"
 if [ -d "$last_arg" ]; then
     BUILD_CONTEXT="$last_arg"
 else
-    BUILD_CONTEXT="${BUILD_CONTEXT:-"${script_dir}/../../.."}"
+    BUILD_CONTEXT="${BUILD_CONTEXT:-"${script_dir}/../.."}"
 fi
 if [ ! -d "$BUILD_CONTEXT" ]; then
     echo "(!) Docker context directory not found at expected path: $BUILD_CONTEXT" >&2
@@ -86,9 +86,9 @@ DOCKER_TARGET=${DOCKER_TARGET:-"base"}
 REMOTE_USER="${REMOTE_USER:-$second_arg}"
 
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
-    build_tag="$DOCKER_TARGET"
+    build_tag="${TAG_PREFIX:-$DOCKER_TARGET}"
 else
-    tag_prefix="${IMAGE_NAME}:${DOCKER_TARGET}"
+    tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
     # Append base image name if variant is 'latest'
     [ "$BASE_IMAGE_VARIANT" != "latest" ] || tag_prefix="${tag_prefix}-${BASE_IMAGE_NAME}"
 

@@ -68,11 +68,11 @@ tag_suffix="${BASE_IMAGE_VARIANT}"
 
 title_prefix="${REPO_NAME} - ${DOCKER_TARGET}"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
-    build_tag="$DOCKER_TARGET"
-    docker_tag="${IMAGE_NAME}:${DOCKER_TARGET}"
+    build_tag="${TAG_PREFIX:-$DOCKER_TARGET}"
+    docker_tag="${IMAGE_NAME}:${build_tag}"
 else
     title_suffix=" - ${BASE_IMAGE_NAME} - ${BASE_IMAGE_VARIANT}"
-    tag_prefix="${IMAGE_NAME}:${DOCKER_TARGET}"
+    tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
     # Append base image name if variant is 'latest'
     [ "$BASE_IMAGE_VARIANT" != "latest" ] || tag_prefix="${tag_prefix}-${BASE_IMAGE_NAME}"
 
@@ -144,7 +144,7 @@ tag_image "$build_tag" "$REGISTRY_URL"
 base_image_name_cap="$(capitalize "$BASE_IMAGE_NAME")"
 image_title="${title_prefix}${title_suffix-}"
 repo_source="https://${REGISTRY_PROVIDER_FQDN}/${REPO_NAMESPACE}/${REPO_NAME}"
-revision="$(git -C "${script_dir}/../../.." rev-parse HEAD)"
+revision="$(git -C "${script_dir}/../.." rev-parse HEAD)"
 description_url="${repo_source}/blob/main/docker"
 description_image="Built from \`${BASE_IMAGE_NAME}:${BASE_IMAGE_VARIANT}\`."
 description_docs="For documentation and source, visit: ${description_url}"
