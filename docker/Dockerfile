@@ -193,6 +193,15 @@ RUN python3 -m venv /opt/venv \
 	&& [ ! -f requirements-dev.txt ] \
     || python3 -m pip install --upgrade --no-cache-dir -r requirements-dev.txt \
 	&& echo '. /opt/venv/bin/activate' >> /home/$USERNAME/.bashrc
+#   && cat <<'EOF' | tee -a /home/$USERNAME/.bashrc /root/.bashrc > /dev/null
+# . /opt/venv/bin/activate
+
+# VIRTUAL_ENV_ENABLED="${VIRTUAL_ENV_ENABLED:-false}"
+# if [ "${VENV_ACTIVATE:-${VENV_ACTIVATE:-$VIRTUAL_ENV_ENABLED}}" = "true" ] && [ "${VIRTUAL_ENV:-}" != "/opt/venv" ]; then
+#   VIRTUAL_ENV_DISABLE_PROMPT=1 . /opt/venv/bin/activate
+#   PS1="(venv) ${PS1:-}"
+# fi
+# EOF
 
 
 FROM base AS app

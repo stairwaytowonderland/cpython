@@ -33,6 +33,9 @@ BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
 DEFAULT_PLATFORM="linux/$(uname -m)"
 FILEZ_TARGET="${FILEZ_TARGET:-filez}"
+[ "$BASE_IMAGE_VARIANT" = "latest" ] \
+    && BASE_IMAGE_REF="$BASE_IMAGE_NAME" \
+    || BASE_IMAGE_REF="${BASE_IMAGE_VARIANT}"
 
 REGISTRY_PROVIDER="${REGISTRY_PROVIDER:-GitHub}"
 REGISTRY_PROVIDER_FQDN="${REGISTRY_PROVIDER_FQDN:-github.com}"
@@ -62,9 +65,9 @@ if [ $# -gt 0 ]; then
 fi
 IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 
-tag_suffix="${BASE_IMAGE_VARIANT}"
-# Append image version if not 'latest'
-[ "$IMAGE_VERSION" = "latest" ] || tag_suffix="${tag_suffix}-${IMAGE_VERSION}"
+# tag_suffix="${BASE_IMAGE_VARIANT}"
+# # Append image version if not 'latest'
+# [ "$IMAGE_VERSION" = "latest" ] || tag_suffix="${tag_suffix}-${IMAGE_VERSION}"
 
 title_prefix="${REPO_NAME} - ${DOCKER_TARGET}"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
@@ -72,12 +75,20 @@ if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
     docker_tag="${IMAGE_NAME}:${build_tag}"
 else
     title_suffix=" - ${BASE_IMAGE_NAME} - ${BASE_IMAGE_VARIANT}"
-    tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
     # Append base image name if variant is 'latest'
-    [ "$BASE_IMAGE_VARIANT" != "latest" ] || tag_prefix="${tag_prefix}-${BASE_IMAGE_NAME}"
-
-    build_tag="${tag_prefix}-${BASE_IMAGE_VARIANT}"
-    docker_tag="${tag_prefix}-${tag_suffix}"
+    if [ "$BASE_IMAGE_VARIANT" = "latest" ]; then
+        build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+        docker_tag="${build_tag}"
+    else
+        if [ "$TAG_PREFIX" = "latest" ]; then
+            build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+        else
+            tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
+            build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
+        fi
+        docker_tag="${build_tag}"
+    fi
+    [ "$IMAGE_VERSION" = "latest" ] || docker_tag="${docker_tag}-${IMAGE_VERSION}"
 fi
 
 # * Registry login happens here
