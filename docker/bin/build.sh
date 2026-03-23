@@ -87,20 +87,18 @@ fi
 DOCKER_TARGET=${DOCKER_TARGET:-"base"}
 # Determine REMOTE_USER (the devcontainer non-root user, e.g., 'vscode' or 'devcontainer')
 REMOTE_USER="${REMOTE_USER:-$second_arg}"
-
+TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
-    build_tag="${TAG_PREFIX:-$DOCKER_TARGET}"
+    build_tag="${TAG_PREFIX}"
 else
-    # Append base image name if variant is 'latest'
-    if [ "$BASE_IMAGE_VARIANT" = "latest" ]; then
+    build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    if [ "$BASE_IMAGE_VARIANT" = "latest" ] || [ -n "$TAG_PREFIX" ]; then
+        tag_prefix="${IMAGE_NAME}:${TAG_PREFIX}"
+        build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
+    fi
+
+    if [ "$TAG_PREFIX" = "latest" ]; then
         build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-    else
-        if [ "$TAG_PREFIX" = "latest" ]; then
-            build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-        else
-            tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
-            build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
-        fi
     fi
 fi
 

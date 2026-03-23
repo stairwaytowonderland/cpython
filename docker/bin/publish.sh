@@ -27,7 +27,7 @@ first_arg="${1-}"
 # ---------------------------------------
 
 LATEST_TARGET="${LATEST_TARGET:-base}"
-REGISTRY_HOST="${REGISTRY_HOST:-ghcr.io}"
+REGISTRY_HOST="${REGISTRY_HOST:-registry-1.docker.io}"
 
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
@@ -37,8 +37,8 @@ FILEZ_TARGET="${FILEZ_TARGET:-filez}"
     && BASE_IMAGE_REF="$BASE_IMAGE_NAME" \
     || BASE_IMAGE_REF="${BASE_IMAGE_VARIANT}"
 
-REGISTRY_PROVIDER="${REGISTRY_PROVIDER:-GitHub}"
-REGISTRY_PROVIDER_FQDN="${REGISTRY_PROVIDER_FQDN:-github.com}"
+REGISTRY_PROVIDER="${REGISTRY_PROVIDER:-Docker Hub}"
+REGISTRY_PROVIDER_FQDN="${REGISTRY_PROVIDER_FQDN:-hub.docker.com}"
 REPO_NAMESPACE="${REPO_NAMESPACE-}"
 REPO_NAME="${REPO_NAME-}"
 
@@ -68,26 +68,25 @@ IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 # tag_suffix="${BASE_IMAGE_VARIANT}"
 # # Append image version if not 'latest'
 # [ "$IMAGE_VERSION" = "latest" ] || tag_suffix="${tag_suffix}-${IMAGE_VERSION}"
-
+TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
 title_prefix="${REPO_NAME} - ${DOCKER_TARGET}"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
-    build_tag="${TAG_PREFIX:-$DOCKER_TARGET}"
+    build_tag="${TAG_PREFIX}"
     docker_tag="${IMAGE_NAME}:${build_tag}"
 else
     title_suffix=" - ${BASE_IMAGE_NAME} - ${BASE_IMAGE_VARIANT}"
-    # Append base image name if variant is 'latest'
-    if [ "$BASE_IMAGE_VARIANT" = "latest" ]; then
-        build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-        docker_tag="${build_tag}"
-    else
-        if [ "$TAG_PREFIX" = "latest" ]; then
-            build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-        else
-            tag_prefix="${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
-            build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
-        fi
+    build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    if [ "$BASE_IMAGE_VARIANT" = "latest" ] || [ -n "$TAG_PREFIX" ]; then
+        tag_prefix="${IMAGE_NAME}:${TAG_PREFIX}"
+        build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
         docker_tag="${build_tag}"
     fi
+
+    if [ "$TAG_PREFIX" = "latest" ]; then
+        build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    fi
+
+    docker_tag="${build_tag}"
     [ "$IMAGE_VERSION" = "latest" ] || docker_tag="${docker_tag}-${IMAGE_VERSION}"
 fi
 

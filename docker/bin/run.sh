@@ -66,19 +66,22 @@ fi
 REMOTE_USER="${REMOTE_USER:-devcontainer}"
 IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 
+TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
 REMOTE_HUB="${REMOTE_HUB-}"
 if [ -n "$REMOTE_HUB" ]; then
-    docker_tag="${REMOTE_HUB}/${IMAGE_NAME}:${TAG_PREFIX:-$DOCKER_TARGET}"
+    docker_tag="${REMOTE_HUB}/${IMAGE_NAME}:${TAG_PREFIX}"
 else
-    # Append base image name if variant is 'latest'
-    TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
-    if [ "$BASE_IMAGE_VARIANT" = "latest" ] || [ "$TAG_PREFIX" = "latest" ]; then
-        build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-        publish_tag="${build_tag}"
-    else
-        build_tag="${IMAGE_NAME}:${TAG_PREFIX}-${BASE_IMAGE_REF}"
-        publish_tag="${build_tag}"
+    build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    if [ "$BASE_IMAGE_VARIANT" = "latest" ] && [ -n "$TAG_PREFIX" ]; then
+        tag_prefix="${IMAGE_NAME}:${TAG_PREFIX}"
+        build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
     fi
+
+    if [ "$TAG_PREFIX" = "latest" ]; then
+        build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    fi
+
+    publish_tag="${build_tag}"
     [ "$IMAGE_VERSION" = "latest" ] || publish_tag="${publish_tag}-${IMAGE_VERSION}"
 
     build_id="$(docker images -q "$build_tag")"
