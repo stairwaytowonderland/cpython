@@ -56,6 +56,7 @@ fi
 
 # ---------------------------------------
 
+DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
 DEFAULT_PLATFORM="linux/$(uname -m)"
@@ -63,6 +64,11 @@ FILEZ_TARGET="${FILEZ_TARGET:-filez}"
 [ "$BASE_IMAGE_VARIANT" = "latest" ] \
     && BASE_IMAGE_REF="$BASE_IMAGE_NAME" \
     || BASE_IMAGE_REF="${BASE_IMAGE_VARIANT}"
+LATEST_TARGET="${LATEST_TARGET:-$DEFAULT_TARGET}"
+REGISTRY_HOST="${REGISTRY_HOST:-registry-1.docker.io}"
+REGISTRY_PROVIDER="${REGISTRY_PROVIDER:-Docker Hub}"
+REPO_NAMESPACE="${REPO_NAMESPACE-}"
+REPO_NAME="${REPO_NAME-}"
 
 # Determine Docker context
 if [ -d "$last_arg" ]; then
@@ -84,10 +90,11 @@ if [ -n "${IMAGE_NAME##*:}" ] && [ "${IMAGE_NAME##*:}" != "$IMAGE_NAME" ]; then
     DOCKER_TARGET="${IMAGE_NAME##*:}"
     IMAGE_NAME="${IMAGE_NAME%%:*}"
 fi
-DOCKER_TARGET=${DOCKER_TARGET:-"base"}
+DOCKER_TARGET="${DOCKER_TARGET:-$DEFAULT_TARGET}"
 # Determine REMOTE_USER (the devcontainer non-root user, e.g., 'vscode' or 'devcontainer')
 REMOTE_USER="${REMOTE_USER:-$second_arg}"
-TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
+TAG_SUFFIX="${TAG_SUFFIX:-$DOCKER_TARGET}"
+[ -n "${TAG_PREFIX-}" ] && TAG_SUFFIX="$DOCKER_TARGET" || TAG_PREFIX="$DOCKER_TARGET"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
     build_tag="${TAG_PREFIX}"
 else
@@ -100,6 +107,13 @@ else
     if [ "$TAG_PREFIX" = "latest" ]; then
         build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
     fi
+fi
+
+[ "$TAG_SUFFIX" = "$DEFAULT_TARGET" ] || build_tag="${build_tag}-${TAG_SUFFIX}"
+
+if [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+    latest_tag="${IMAGE_NAME}:latest"
+    build_tag="$latest_tag"
 fi
 
 dockerfile_path="${BUILD_CONTEXT}/docker/Dockerfile"
@@ -146,6 +160,37 @@ com+=("$BUILD_CONTEXT")
 
 set -- "${com[@]}"
 . "${script_dir}/executer.sh" "$@"
+
+if [ "${BUILDX_PUSH:-true}" = "true" ]; then
+    echo "(*) Pushing Docker image with provenance and sbom attestations..." >&2
+    if ! . "${script_dir}/login.sh" "${REGISTRY_USER:-${REPO_NAMESPACE}}" "${REPO_NAME:-${IMAGE_NAME}}"; then
+        echo "Error: Not logged in to ${REGISTRY_PROVIDER} Container Registry." >&2
+        exit 1
+    elif [ -z "${REGISTRY_URL_PREFIX-}" ]; then
+        echo "Error: REGISTRY_URL_PREFIX is not set." >&2
+        exit 1
+    fi
+    IMAGE_VERSION="${IMAGE_VERSION:-latest}"
+    docker_tag="${build_tag}"
+    [ "$IMAGE_VERSION" = "latest" ] || docker_tag="${docker_tag}-${IMAGE_VERSION}"
+    REGISTRY_URL="${REGISTRY_URL_PREFIX}/${docker_tag}"
+    push_com=(docker buildx build)
+    push_com+=("-f" "${dockerfile_path}")
+    push_com+=("--push")
+    push_com+=("--provenance=mode=max")
+    push_com+=("--sbom=true")
+    push_com+=("--cache-from" "${build_tag}")
+    push_com+=("--target" "${DOCKER_TARGET}")
+    push_com+=("-t" "${REGISTRY_URL}")
+    if [ -z "${LATEST_TAG-}" ] && [ "$DOCKER_TARGET" = "${LATEST_TARGET}" ] && [ "${LATEST:-false}" = "true" ]; then
+        push_com+=("-t" "${REGISTRY_URL_PREFIX}/${IMAGE_NAME}:latest")
+    fi
+    push_com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
+    push_com+=("${com_arg[@]}")
+    push_com+=("$BUILD_CONTEXT")
+    set -- "${push_com[@]}"
+    . "${script_dir}/executer.sh" "$@"
+fi
 
 echo "(√) Done! Docker image build complete." >&2
 # echo "_______________________________________" >&2

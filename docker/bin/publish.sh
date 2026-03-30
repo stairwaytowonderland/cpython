@@ -26,7 +26,8 @@ first_arg="${1-}"
 
 # ---------------------------------------
 
-LATEST_TARGET="${LATEST_TARGET:-base}"
+DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
+LATEST_TARGET="${LATEST_TARGET:-$DEFAULT_TARGET}"
 REGISTRY_HOST="${REGISTRY_HOST:-registry-1.docker.io}"
 
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
@@ -52,7 +53,7 @@ if [ -n "${IMAGE_NAME##*:}" ] && [ "${IMAGE_NAME##*:}" != "$IMAGE_NAME" ]; then
     DOCKER_TARGET="${IMAGE_NAME##*:}"
     IMAGE_NAME="${IMAGE_NAME%%:*}"
 fi
-DOCKER_TARGET=${DOCKER_TARGET:-"base"}
+DOCKER_TARGET="${DOCKER_TARGET:-$DEFAULT_TARGET}"
 # Determine REGISTRY_USER
 if [ $# -gt 0 ]; then
     REGISTRY_USER="${1:-$REGISTRY_USER}"
@@ -65,10 +66,8 @@ if [ $# -gt 0 ]; then
 fi
 IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 
-# tag_suffix="${BASE_IMAGE_VARIANT}"
-# # Append image version if not 'latest'
-# [ "$IMAGE_VERSION" = "latest" ] || tag_suffix="${tag_suffix}-${IMAGE_VERSION}"
-TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
+TAG_SUFFIX="${TAG_SUFFIX:-$DOCKER_TARGET}"
+[ -n "${TAG_PREFIX-}" ] && TAG_SUFFIX="$DOCKER_TARGET" || TAG_PREFIX="$DOCKER_TARGET"
 title_prefix="${REPO_NAME} - ${DOCKER_TARGET}"
 if [ "$DOCKER_TARGET" = "$FILEZ_TARGET" ]; then
     build_tag="${TAG_PREFIX}"
@@ -79,15 +78,22 @@ else
     if [ "$BASE_IMAGE_VARIANT" = "latest" ] || [ -n "$TAG_PREFIX" ]; then
         tag_prefix="${IMAGE_NAME}:${TAG_PREFIX}"
         build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
-        docker_tag="${build_tag}"
     fi
 
     if [ "$TAG_PREFIX" = "latest" ]; then
         build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
     fi
 
-    docker_tag="${build_tag}"
-    [ "$IMAGE_VERSION" = "latest" ] || docker_tag="${docker_tag}-${IMAGE_VERSION}"
+    [ "$TAG_SUFFIX" = "$DEFAULT_TARGET" ] || build_tag="${build_tag}-${TAG_SUFFIX}"
+
+    [ "$IMAGE_VERSION" = "latest" ] || build_tag="${build_tag}-${IMAGE_VERSION}"
+
+    if [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+        LATEST_TAG="${IMAGE_NAME}:latest"
+        build_tag="$LATEST_TAG"
+    fi
+
+    docker_tag="$build_tag"
 fi
 
 # * Registry login happens here
@@ -137,20 +143,6 @@ if [ ${#platforms[*]} -gt 1 ]; then
     # fi
 fi
 
-tag_image() {
-    local source_image="$1"
-    local target_image="$2"
-    echo "(+) Preparing Docker image for ${REGISTRY_PROVIDER} Container Registry..." >&2
-    echo "(*) Tagging Docker image '${source_image}' as '${target_image}'..." >&2
-    (
-        set -x
-        docker tag "$source_image" "$target_image"
-    )
-    echo -e "\033[2m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\033[0m" >&2
-}
-
-tag_image "$build_tag" "$REGISTRY_URL"
-
 base_image_name_cap="$(capitalize "$BASE_IMAGE_NAME")"
 image_title="${title_prefix}${title_suffix-}"
 repo_source="https://${REGISTRY_PROVIDER_FQDN}/${REPO_NAMESPACE}/${REPO_NAME}"
@@ -175,25 +167,27 @@ EOF
     } | xargs echo
 )
 
-echo "(∫) Publishing Docker image to ${REGISTRY_PROVIDER} Container Registry..." >&2
-com=(docker push)
-com+=("$REGISTRY_URL")
-
-set -- "${com[@]}"
-. "${script_dir}/executer.sh" "$@"
-
-if [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
-    latest_tag="${IMAGE_NAME}:latest"
-    REGISTRY_URL="${REGISTRY_URL_PREFIX}/${latest_tag}"
-
-    echo "(*) Tagging with 'latest'..." >&2
-    tag_image "$build_tag" "$REGISTRY_URL"
-
+if [ "${BUILDX_PUSH:-true}" != "true" ]; then
+    echo "(∫) Publishing Docker image to ${REGISTRY_PROVIDER} Container Registry..." >&2
     com=(docker push)
     com+=("$REGISTRY_URL")
 
     set -- "${com[@]}"
     . "${script_dir}/executer.sh" "$@"
+
+    if [ -z "${LATEST_TAG-}" ] && [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+        latest_tag="${IMAGE_NAME}:latest"
+        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${latest_tag}"
+
+        echo "(*) Tagging with 'latest'..." >&2
+        tag_image "$build_tag" "$REGISTRY_URL"
+
+        com=(docker push)
+        com+=("$REGISTRY_URL")
+
+        set -- "${com[@]}"
+        . "${script_dir}/executer.sh" "$@"
+    fi
 fi
 
 remove_danglers() {

@@ -27,6 +27,7 @@ last_arg="${*: -1}"
 
 # ---------------------------------------
 
+DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
 TERM="${TERM-}"
@@ -46,7 +47,11 @@ if [ -n "${IMAGE_NAME##*:}" ] && [ "${IMAGE_NAME##*:}" != "$IMAGE_NAME" ]; then
     DOCKER_TARGET="${IMAGE_NAME##*:}"
     IMAGE_NAME="${IMAGE_NAME%%:*}"
 fi
-DOCKER_TARGET=${DOCKER_TARGET:-"base"}
+if [ -z "${DOCKER_TARGET-}" ] || [ "${DOCKER_TARGET-}" = "latest" ]; then
+    LATEST=true
+fi
+DOCKER_TARGET=${DOCKER_TARGET:-"$DEFAULT_TARGET"}
+
 if [ -d "$last_arg" ]; then
     RUN_CONTEXT="$last_arg"
 else
@@ -67,38 +72,46 @@ REMOTE_USER="${REMOTE_USER:-devcontainer}"
 IMAGE_VERSION="${IMAGE_VERSION:-latest}"
 
 TAG_PREFIX="${TAG_PREFIX:-$DOCKER_TARGET}"
+TAG_SUFFIX="${TAG_SUFFIX:-$DEFAULT_TARGET}"
 REMOTE_HUB="${REMOTE_HUB-}"
 if [ -n "$REMOTE_HUB" ]; then
     docker_tag="${REMOTE_HUB}/${IMAGE_NAME}:${TAG_PREFIX}"
 else
-    build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
-    if [ "$BASE_IMAGE_VARIANT" = "latest" ] && [ -n "$TAG_PREFIX" ]; then
+    # build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    if [ "$BASE_IMAGE_VARIANT" = "latest" ] || [ -n "$TAG_PREFIX" ]; then
         tag_prefix="${IMAGE_NAME}:${TAG_PREFIX}"
         build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
     fi
 
-    if [ "$TAG_PREFIX" = "latest" ]; then
+    if [ "${LATEST:-false}" = "true" ]; then
+        build_tag="${IMAGE_NAME}:latest"
+    elif [ -z "$TAG_PREFIX" ] || [ "$TAG_PREFIX" = "latest" ]; then
         build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
+    elif [ "$TAG_SUFFIX" != "$DEFAULT_TARGET" ]; then
+        build_tag="${build_tag}-${TAG_SUFFIX}"
     fi
 
-    publish_tag="${build_tag}"
-    [ "$IMAGE_VERSION" = "latest" ] || publish_tag="${publish_tag}-${IMAGE_VERSION}"
-
-    build_id="$(docker images -q "$build_tag")"
-    publish_id="$(docker images -q "$publish_tag")"
-    image_id="${build_id:-$publish_id}"
-
-    echo "(*) Looking for Docker image id '${image_id}' ('${build_tag}' or '${publish_tag}') locally..." >&2
-
-    if docker image inspect "$build_id" > /dev/null 2>&1; then
-        echo "(*) Found Docker image '${build_tag}'" >&2
+    if [ -n "$build_tag" ]; then
         docker_tag="$build_tag"
-    elif docker image inspect "$publish_id" > /dev/null 2>&1; then
-        echo "(*) Found Docker image '${publish_tag}'" >&2
-        docker_tag="$publish_tag"
-    else
-        echo "(!) Docker image not found locally. Please build the image first." >&2
-        exit 1
+        publish_tag="${build_tag}"
+        [ "$IMAGE_VERSION" = "latest" ] || publish_tag="${publish_tag}-${IMAGE_VERSION}"
+
+        build_id="$(docker images -q "$build_tag")"
+        publish_id="$(docker images -q "$publish_tag")"
+        image_id="${build_id:-$publish_id}"
+
+        echo "(*) Looking for Docker image id '${image_id}' ('${build_tag}' or '${publish_tag}') locally..." >&2
+
+        if docker image inspect "$build_id" > /dev/null 2>&1; then
+            echo "(*) Found Docker image '${build_tag}'" >&2
+            docker_tag="$build_tag"
+        elif docker image inspect "$publish_id" > /dev/null 2>&1; then
+            echo "(*) Found Docker image '${publish_tag}'" >&2
+            docker_tag="$publish_tag"
+        else
+            echo "(!) Docker image not found locally. Please build the image first." >&2
+            exit 1
+        fi
     fi
 fi
 

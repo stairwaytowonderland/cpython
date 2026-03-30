@@ -1,10 +1,41 @@
-/docker/bin
-**/.*
-**/__*
-**/Dockerfile
-**/*.bak
-**/*.old
-**/*.orig
-**/*.private
-**/*.tmp
-**/*.md
+# OS
+.DS_Store
+*.bak
+*.old
+*.orig
+*.private
+*.bin
+*.zip
+*.tgz
+*.tar.gz
+
+# IDE
+.vscode/*
+!.vscode
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# APP
+*.env
+*.pem
+
+# TERRAFORM
+*.auto.*
+*.tfstate
+*.tfstate.*
+.terraform
+infra/modules/**/.terraform.lock.hcl
+infra/aws/**/cloudformation/**/.terraform.lock.hcl
+
+# PYTHON
+__pycache__/
+.venv/
+
+# Project-specific ignores
+test.sh
+*.bak
+*.old
+*.tmp
+*.private
+/.last
+/.command
