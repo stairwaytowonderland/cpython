@@ -26,7 +26,7 @@ first_arg="${1-}"
 
 # ---------------------------------------
 
-DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
+DEFAULT_TARGET="${DEFAULT_TARGET:-base}"
 LATEST_TARGET="${LATEST_TARGET:-$DEFAULT_TARGET}"
 REGISTRY_HOST="${REGISTRY_HOST:-registry-1.docker.io}"
 
@@ -44,7 +44,7 @@ REPO_NAMESPACE="${REPO_NAMESPACE-}"
 REPO_NAME="${REPO_NAME-}"
 
 # Determine IMAGE_NAME
-IMAGE_NAME=${first_arg:-$REPO_NAME}
+IMAGE_NAME="${first_arg:-$REPO_NAME}"
 if [ -z "$IMAGE_NAME" ]; then
     echo "Usage: $0 <image-name[:build_target]> [registry-username] [image-version]" >&2
     exit 1
@@ -89,8 +89,8 @@ else
     [ "$IMAGE_VERSION" = "latest" ] || build_tag="${build_tag}-${IMAGE_VERSION}"
 
     if [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
-        LATEST_TAG="${IMAGE_NAME}:latest"
-        build_tag="$LATEST_TAG"
+        latest_tag="${IMAGE_NAME}:latest"
+        # build_tag="$LATEST_TAG"
     fi
 
     docker_tag="$build_tag"
@@ -175,8 +175,7 @@ if [ "${BUILDX_PUSH:-true}" != "true" ]; then
     set -- "${com[@]}"
     . "${script_dir}/executer.sh" "$@"
 
-    if [ -z "${LATEST_TAG-}" ] && [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
-        latest_tag="${IMAGE_NAME}:latest"
+    if [ -n "${latest_tag-}" ]; then
         REGISTRY_URL="${REGISTRY_URL_PREFIX}/${latest_tag}"
 
         echo "(*) Tagging with 'latest'..." >&2
@@ -212,6 +211,9 @@ echo "(∫) Adding annotations to ${REGISTRY_URL} ..." >&2
 # https://github.com/opencontainers/image-spec/blob/main/annotations.md#pre-defined-annotation-keys
 com=(docker buildx imagetools create)
 com+=("-t" "${REGISTRY_URL}")
+if [ -n "${latest_tag-}" ]; then
+    com+=("-t" "${REGISTRY_URL_PREFIX}/${latest_tag}")
+fi
 # https://specs.opencontainers.org/image-spec/annotations/
 com+=("--annotation" "${annotation_prefix}org.opencontainers.image.description=${image_description//\\\`/\`}")
 com+=("--annotation" "${annotation_prefix}org.opencontainers.image.title=${image_title%.}${title_arch# }")

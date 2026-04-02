@@ -148,6 +148,24 @@ remove_packages() {
     done
 }
 
+packages_to_remove() {
+    _pti="${1-}"
+    _ptk="${2-}"
+    if [ -z "$_pti" ] && [ -n "${PACKAGES_TO_INSTALL-}" ]; then
+        _pti="${PACKAGES_TO_INSTALL# }"
+    fi
+    if [ -n "$_pti" ]; then
+        for pkg in $_pti; do
+            case "$pkg" in
+                *$_ptk*) [ -n "$_ptk" ] || PACKAGES_TO_REMOVE="${PACKAGES_TO_REMOVE% } $pkg" ;;
+                *) PACKAGES_TO_REMOVE="${PACKAGES_TO_REMOVE% } $pkg" ;;
+            esac
+        done
+    fi
+    PACKAGES_TO_REMOVE="${PACKAGES_TO_REMOVE-}"
+    unset _pti _ptk pkg
+}
+
 # Usage example for defining packages to install:
 #
 # PACKAGES_TO_INSTALL="${PACKAGES_TO_INSTALL% } $(
@@ -161,6 +179,12 @@ remove_packages() {
 # [ -z "$PACKAGES_TO_INSTALL" ] \
 #     && update_and_install "$PACKAGES_TO_INSTALL" \
 #     || echo "Warning: No packages to install."
+
+# PACKAGES_TO_KEEP="${PACKAGES_TO_KEEP% } package-to-keep"
+
+# update_and_install "${PACKAGES_TO_INSTALL# }"
+# packages_to_remove "${PACKAGES_TO_INSTALL# }" "${PACKAGES_TO_KEEP# }"
+# remove_packages "${PACKAGES_TO_REMOVE-}"
 
 __check_semver() {
     _version="${1-}"

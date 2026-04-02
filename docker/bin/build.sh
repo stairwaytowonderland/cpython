@@ -56,7 +56,7 @@ fi
 
 # ---------------------------------------
 
-DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
+DEFAULT_TARGET="${DEFAULT_TARGET:-base}"
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
 DEFAULT_PLATFORM="linux/$(uname -m)"
@@ -74,14 +74,14 @@ REPO_NAME="${REPO_NAME-}"
 if [ -d "$last_arg" ]; then
     BUILD_CONTEXT="$last_arg"
 else
-    BUILD_CONTEXT="${BUILD_CONTEXT:-"${script_dir}/../.."}"
+    BUILD_CONTEXT="${BUILD_CONTEXT:-${script_dir}/../..}"
 fi
 if [ ! -d "$BUILD_CONTEXT" ]; then
     echo "(!) Docker context directory not found at expected path: $BUILD_CONTEXT" >&2
     exit 1
 fi
 # Determine IMAGE_NAME and DOCKER_TARGET
-IMAGE_NAME=${IMAGE_NAME:-$first_arg}
+IMAGE_NAME="${IMAGE_NAME:-$first_arg}"
 if [ -z "$IMAGE_NAME" ]; then
     echo "Usage: $0 <image-name[:build_target]> [build-args...] [options] [context]" >&2
     exit 1
@@ -111,9 +111,9 @@ fi
 
 [ "$TAG_SUFFIX" = "$DEFAULT_TARGET" ] || build_tag="${build_tag}-${TAG_SUFFIX}"
 
-if [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+if [ -z "${latest_tag-}" ] && [ "$DOCKER_TARGET" = "$LATEST_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+    echo "(*) Also tagging with 'latest'..." >&2
     latest_tag="${IMAGE_NAME}:latest"
-    build_tag="$latest_tag"
 fi
 
 dockerfile_path="${BUILD_CONTEXT}/docker/Dockerfile"
@@ -131,6 +131,9 @@ com+=("-f" "${dockerfile_path}")
 com+=("--label" "org.opencontainers.image.ref.name=${build_tag}")
 com+=("--target" "${DOCKER_TARGET}")
 com+=("-t" "${build_tag}")
+if [ -n "${latest_tag-}" ]; then
+    com+=("-t" "${latest_tag}")
+fi
 com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
 # The `debian:bookworm-slim` image provides a minimal base for development containers
 com_arg=()
@@ -139,9 +142,7 @@ com_arg+=("--build-arg" "VARIANT=${BASE_IMAGE_VARIANT}")
 if [ -n "$REMOTE_USER" ]; then
     com_arg+=("--build-arg" "USERNAME=${REMOTE_USER}")
 fi
-# com_arg+=("--build-arg" "PYTHON_VERSION=${PYTHON_VERSION:-latest}")
 com_arg+=("--build-arg" "TIMEZONE=$(zoneinfo)")
-com_arg+=("--build-arg" "DEV=${DEV:-false}")
 # Automatically pass build arguments prefixed with DOCKER_BUILD_
 # Strip the prefix and pass the variable to docker build
 while IFS='=' read -r name value; do
@@ -172,7 +173,11 @@ if [ "${BUILDX_PUSH:-true}" = "true" ]; then
     fi
     IMAGE_VERSION="${IMAGE_VERSION:-latest}"
     docker_tag="${build_tag}"
-    [ "$IMAGE_VERSION" = "latest" ] || docker_tag="${docker_tag}-${IMAGE_VERSION}"
+    if [ "$IMAGE_VERSION" != "latest" ]; then
+        docker_tag="${docker_tag}-${IMAGE_VERSION}"
+    else
+        docker_tag="${build_tag}"
+    fi
     REGISTRY_URL="${REGISTRY_URL_PREFIX}/${docker_tag}"
     push_com=(docker buildx build)
     push_com+=("-f" "${dockerfile_path}")
@@ -182,8 +187,8 @@ if [ "${BUILDX_PUSH:-true}" = "true" ]; then
     push_com+=("--cache-from" "${build_tag}")
     push_com+=("--target" "${DOCKER_TARGET}")
     push_com+=("-t" "${REGISTRY_URL}")
-    if [ -z "${LATEST_TAG-}" ] && [ "$DOCKER_TARGET" = "${LATEST_TARGET}" ] && [ "${LATEST:-false}" = "true" ]; then
-        push_com+=("-t" "${REGISTRY_URL_PREFIX}/${IMAGE_NAME}:latest")
+    if [ -n "${latest_tag-}" ]; then
+        push_com+=("-t" "${REGISTRY_URL_PREFIX}/${latest_tag}")
     fi
     push_com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
     push_com+=("${com_arg[@]}")

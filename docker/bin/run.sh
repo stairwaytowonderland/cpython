@@ -27,7 +27,7 @@ last_arg="${*: -1}"
 
 # ---------------------------------------
 
-DEFAULT_TARGET="${DEFAULT_TARGET:-builder}"
+DEFAULT_TARGET="${DEFAULT_TARGET:-base}"
 BASE_IMAGE_NAME="${BASE_IMAGE_NAME:-ubuntu}"
 BASE_IMAGE_VARIANT="${BASE_IMAGE_VARIANT:-latest}"
 TERM="${TERM-}"
@@ -47,15 +47,17 @@ if [ -n "${IMAGE_NAME##*:}" ] && [ "${IMAGE_NAME##*:}" != "$IMAGE_NAME" ]; then
     DOCKER_TARGET="${IMAGE_NAME##*:}"
     IMAGE_NAME="${IMAGE_NAME%%:*}"
 fi
+
 if [ -z "${DOCKER_TARGET-}" ] || [ "${DOCKER_TARGET-}" = "latest" ]; then
     LATEST=true
 fi
-DOCKER_TARGET=${DOCKER_TARGET:-"$DEFAULT_TARGET"}
+ORIGINAL_TARGET="${DOCKER_TARGET-}"
+DOCKER_TARGET="${ORIGINAL_TARGET:-$DEFAULT_TARGET}"
 
 if [ -d "$last_arg" ]; then
     RUN_CONTEXT="$last_arg"
 else
-    RUN_CONTEXT="${RUN_CONTEXT:-"${script_dir}/../.."}"
+    RUN_CONTEXT="${RUN_CONTEXT:-${script_dir}/../..}"
 fi
 if [ ! -d "$RUN_CONTEXT" ]; then
     echo "(!) Docker context directory not found at expected path: ${RUN_CONTEXT}" >&2
@@ -83,7 +85,7 @@ else
         build_tag="${tag_prefix}-${BASE_IMAGE_REF}"
     fi
 
-    if [ "${LATEST:-false}" = "true" ]; then
+    if [ "${LATEST:-false}" = "true" ] && { [ -z "${ORIGINAL_TARGET-}" ] || [ "${ORIGINAL_TARGET-}" = "latest" ]; }; then
         build_tag="${IMAGE_NAME}:latest"
     elif [ -z "$TAG_PREFIX" ] || [ "$TAG_PREFIX" = "latest" ]; then
         build_tag="${IMAGE_NAME}:${BASE_IMAGE_REF}"
