@@ -1,6 +1,14 @@
 # Python Docker
 
-Self-maintained Python docker image project.
+A self-maintained Python Docker image that builds [CPython](https://github.com/python/cpython) from source on top of a
+Debian-based (Debian or Ubuntu) base image. Designed for use as a lightweight, customizable Python runtime in
+container-based workflows.
+
+*Inspired by a personal need (want) for a production-grade, Ubuntu-based Python "**base**" image.*
+
+Container repo hosted in [Docker Hub](https://hub.docker.com/repository/docker/stairwaytowonderland/cpython).
+
+See the [docker](./docker/README.md) documentation for more details.
 
 ---
 

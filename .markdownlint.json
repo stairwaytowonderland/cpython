@@ -1,6 +1,6 @@
 {
 	"MD033": {
-		"allowed_elements": ["ins"]
+		"allowed_elements": ["a", "br", "ins"]
 	},
 	"MD036": false,
 	"MD013": {
