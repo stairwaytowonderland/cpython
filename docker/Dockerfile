@@ -249,6 +249,8 @@ FROM builder AS base
 USER $USERNAME
 WORKDIR /home/$USERNAME
 
+CMD ["python3"]
+
 
 FROM builder AS appbuilder
 

@@ -1,27 +1,16 @@
-# cpython
-
-A self-maintained Python Docker image that builds [CPython](https://github.com/python/cpython) from source on top of a
-Debian-based (Debian or Ubuntu) base image. Designed for use as a lightweight, customizable Python runtime in
-container-based workflows.
-
-*Inspired by a personal need (want) for a production-grade, Ubuntu-based Python "**base**" image.*
-
----
-
-## Quick Reference
+# 🐳 Quick Reference
 
 - **GitHub Repository**: [stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
 - **Docker Hub**: [stairwaytowonderland/cpython](https://hub.docker.com/r/stairwaytowonderland/cpython)
 - **Maintained by**: [Andrew Haller](https://github.com/andrewhaller)
 - **License**: [MIT](https://github.com/stairwaytowonderland/cpython/blob/main/LICENSE)
 
----
-
-## Supported Tags
+# Supported Tags
 
 Tags follow the format `<python-version>[-<variant(def|perf)>][-<base-image-ref>]`.
 
-> **NOTE**: If the *base-image* **variant** is `latest`, the `<base-image-ref>` refers to the *base-image* **name**, otherwise
+> ℹ️ **Note**: If the *base-image* **variant** is `latest`, the `<base-image-ref>` refers to the *base-image* **name**,
+> otherwise
 > `<base-image-ref>` refers to the *base-image* **variant**.
 > <br><br>
 > Example:
@@ -42,16 +31,12 @@ Tags follow the format `<python-version>[-<variant(def|perf)>][-<base-image-ref>
 | [`3.11-ubuntu`](https://hub.docker.com/layers/stairwaytowonderland/cpython/3.11-ubuntu)                                                                      | [`3.11-bookworm-slim`](https://hub.docker.com/layers/stairwaytowonderland/cpython/3.11-bookworm-slim)           | 3.11           | Standard build                              |
 | [`3.10-ubuntu`](https://hub.docker.com/layers/stairwaytowonderland/cpython/3.10-ubuntu)                                                                      | [`3.10-bookworm-slim`](https://hub.docker.com/layers/stairwaytowonderland/cpython/3.10-bookworm-slim)           | 3.10           | Standard build                              |
 
----
-
-## Supported Platforms
+# Supported Platforms
 
 - `linux/amd64`
 - `linux/arm64`
 
----
-
-## Base Images
+# Base Images
 
 All images are built on top of Debian-based base images. The default base is `ubuntu:latest`.
 
@@ -60,31 +45,29 @@ All images are built on top of Debian-based base images. The default base is `ub
 | `ubuntu`   | `latest`        |
 | `debian`   | `bookworm-slim` |
 
-> **Note**: The Dockerfile requires a Debian-based image. Other Debian-derived distributions may be used via the
+> ℹ️ **Note**: The Dockerfile requires a Debian-based image. Other Debian-derived distributions may be used via the
 > `IMAGE_NAME` and `VARIANT` build arguments.
 
----
+# How to use this image
 
-## Usage
-
-### Using in a Dockerfile
+## Using in a `Dockerfile`
 
 Use one of the published images as a base for your own application image:
 
 ```dockerfile
 FROM stairwaytowonderland/cpython:3.14-ubuntu
 
-WORKDIR /app
+WORKDIR /usr/src/myapp
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "main.py"]
+CMD [ "python", "./your-daemon-or-script.py" ]
 ```
 
-### Building the Image
+## Building the Image
 
 Clone the repository and use the provided build script from the project root:
 
@@ -115,7 +98,7 @@ docker build \
   .
 ```
 
-### Running a Python Command
+## Running a Python Command
 
 Run a one-off Python command using the image:
 
@@ -129,19 +112,54 @@ Run an interactive Python shell:
 docker run -it --rm stairwaytowonderland/cpython:3.14-ubuntu python3
 ```
 
-Run a local script by mounting your project directory:
+## Running a Single Python Script
 
 ```bash
 docker run --rm \
-  -v "$(pwd)":/app \
-  -w /app \
+  -v "$(pwd)":/usr/src/myapp \
+  -w /myapp \
   stairwaytowonderland/cpython:3.14-ubuntu \
-  python3 main.py
+  python3 your-daemon-or-script.py
 ```
 
----
+# Image Variants
 
-## License
+## `cpython:<version>-ubuntu`
+
+This is the defacto image. Built on [`ubuntu:latest`](https://hub.docker.com/_/ubuntu). Ubuntu is a widely used,
+well-supported Debian-based distribution with a large package ecosystem. This is the default base image and a good
+general-purpose choice for most workloads.
+
+## `cpython:<version>-bookworm-slim`
+
+Built on [`debian:bookworm-slim`](https://hub.docker.com/_/debian). Debian Bookworm Slim is a minimal Debian 12 image
+that strips non-essential packages to reduce the image footprint. A good choice when image size is a priority and
+Ubuntu-specific tooling is not required.
+
+## `cpython:<version>-perf-<base-image-ref>`
+
+A performance-optimized build with [Profile-Guided Optimization (PGO)](https://docs.python.org/3/using/configure.html#performance-options)
+enabled (`ENABLE_OPTIMIZATIONS=true`). PGO uses runtime profiling data collected during the build to produce a faster
+CPython binary. Recommended for production workloads where CPU performance matters. Available for both `ubuntu` and
+`bookworm-slim` base variants.
+
+## `cpython:<version>-dev-<base-image-ref>`
+
+A development-oriented build with extended tooling included (`PYTHON_DEV=true`). Intended for use in development
+environments and dev containers where additional build tools and libraries may be needed. Available for both `ubuntu` and
+`bookworm-slim` base variants.
+
+# What is this project?
+
+A self-maintained Python  Docker image that builds [CPython](https://github.com/python/cpython) from source on top of a
+Debian-based (Debian or Ubuntu) base image. Designed for use as a lightweight, customizable Python runtime in
+container-based workflows.
+
+*Inspired by a personal need (want) for a production-grade, Ubuntu-based Python "**base**" image.*
+
+> 🌐 [github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
+
+# License
 
 This project is licensed under the **MIT License** — free to use, modify, and distribute with attribution.
 
