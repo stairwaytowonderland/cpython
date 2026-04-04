@@ -183,6 +183,8 @@ container-based workflows.
 
 > 🌐 [github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
 
+![logo](https://raw.githubusercontent.com/stairwaytowonderland/cpython/refs/heads/main/docs/assets/logo.jpg)
+
 # License
 
 This project is licensed under the **MIT License** — free to use, modify, and distribute with attribution.
