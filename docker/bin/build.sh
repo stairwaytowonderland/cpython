@@ -116,6 +116,8 @@ if [ ! -f "$dockerfile_path" ]; then
 fi
 
 echo "(*) Building Docker image for ${build_tag}..." >&2
+echo "(*) Dockerfile path: ${dockerfile_path}" >&2
+echo "(*) Docker context: ${BUILD_CONTEXT}" >&2
 
 if [ -z "${version_tag-}" ] && [ "$BASE_IMAGE_NAME" = "$DEFAULT_BASE_IMAGE_NAME" ] && [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" != "true" ]; then
     if [ "$tag_variant" != "ext" ] && [ "$tag_variant" != "perf" ]; then
@@ -123,52 +125,60 @@ if [ -z "${version_tag-}" ] && [ "$BASE_IMAGE_NAME" = "$DEFAULT_BASE_IMAGE_NAME"
         version_tag="${IMAGE_NAME}:${TAG_PREFIX}"
         echo "'${version_tag}'" >&2
     fi
+elif [ -z "${unstable_tag-}" ] && [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${UNSTABLE:-false}" = "true" ]; then
+    echo -n "(*) Also tagging with unstable ... " >&2
+    unstable_tag="${IMAGE_NAME}:unstable"
+    echo "'${unstable_tag}'" >&2
 elif [ -z "${latest_tag-}" ] && [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+    echo -n "(*) Also tagging with major version ... " >&2
+    major_version_tag="${IMAGE_NAME}:${TAG_PREFIX%%.*}"
+    echo "'${major_version_tag}'" >&2
     echo -n "(*) Also tagging with latest ... " >&2
     latest_tag="${IMAGE_NAME}:latest"
     echo "'${latest_tag}'" >&2
 fi
 
-echo "(*) Building Docker image for ${DOCKER_TARGET}..." >&2
-echo "(*) Dockerfile path: ${dockerfile_path}" >&2
-echo "(*) Docker context: ${BUILD_CONTEXT}" >&2
-com=(docker build)
-com+=("-f" "${dockerfile_path}")
-com+=("--label" "org.opencontainers.image.ref.name=${build_tag}")
-com+=("--target" "${DOCKER_TARGET}")
-com+=("-t" "${build_tag}")
-[ -z "${version_tag-}" ] || com+=("-t" "${version_tag}")
-[ -z "${latest_tag-}" ] || com+=("-t" "${latest_tag}")
-com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
-# The `debian:bookworm-slim` image provides a minimal base for development containers
-com_arg=()
-com_arg+=("--build-arg" "IMAGE_NAME=${BASE_IMAGE_NAME}")
-com_arg+=("--build-arg" "VARIANT=${BASE_IMAGE_VARIANT}")
-if [ -n "$REMOTE_USER" ]; then
-    com_arg+=("--build-arg" "USERNAME=${REMOTE_USER}")
-fi
-com_arg+=("--build-arg" "TIMEZONE=$(zoneinfo)")
-# Automatically pass build arguments prefixed with DOCKER_BUILD_
-# Strip the prefix and pass the variable to docker build
-while IFS='=' read -r name value; do
-    if [[ $name == DOCKER_BUILD_*   ]]; then
-        arg_name="${name#DOCKER_BUILD_}"
-        com_arg+=("--build-arg" "${arg_name}=${value}")
-    fi
-done < <(env)
-for arg in "$@"; do
-    if [ "$arg" != "$BUILD_CONTEXT" ]; then
-        com_arg+=("$arg")
-    fi
-done
-com+=("${com_arg[@]}")
-com+=("$BUILD_CONTEXT")
+if [ "${BUILDX_PUSH:-true}" != "true" ]; then
+    echo "(*) Building Docker image without pushing..." >&2
 
-set -- "${com[@]}"
-. "${script_dir}/executer.sh" "$@"
+    com=(docker build)
+    com+=("-f" "${dockerfile_path}")
+    com+=("--label" "org.opencontainers.image.ref.name=${build_tag}")
+    com+=("--target" "${DOCKER_TARGET}")
+    [ -z "${version_tag-}" ] || com+=("-t" "${version_tag}")
+    [ -z "${unstable_tag-}" ] || com+=("-t" "${unstable_tag}")
+    [ -z "${latest_tag-}" ] || com+=("-t" "${latest_tag}")
+    [ -z "${major_version_tag-}" ] || com+=("-t" "${major_version_tag}")
+    com+=("-t" "${build_tag}")
+    com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
+    # The `debian:bookworm-slim` image provides a minimal base for development containers
+    com_arg=()
+    com_arg+=("--build-arg" "IMAGE_NAME=${BASE_IMAGE_NAME}")
+    com_arg+=("--build-arg" "VARIANT=${BASE_IMAGE_VARIANT}")
+    if [ -n "$REMOTE_USER" ]; then
+        com_arg+=("--build-arg" "USERNAME=${REMOTE_USER}")
+    fi
+    com_arg+=("--build-arg" "TIMEZONE=$(zoneinfo)")
+    # Automatically pass build arguments prefixed with DOCKER_BUILD_
+    # Strip the prefix and pass the variable to docker build
+    while IFS='=' read -r name value; do
+        if [[ $name == DOCKER_BUILD_*   ]]; then
+            arg_name="${name#DOCKER_BUILD_}"
+            com_arg+=("--build-arg" "${arg_name}=${value}")
+        fi
+    done < <(env)
+    for arg in "$@"; do
+        if [ "$arg" != "$BUILD_CONTEXT" ]; then
+            com_arg+=("$arg")
+        fi
+    done
+    com+=("${com_arg[@]}")
+    com+=("$BUILD_CONTEXT")
 
-if [ "${BUILDX_PUSH:-true}" = "true" ]; then
-    echo "(*) Pushing Docker image with provenance and sbom attestations..." >&2
+    set -- "${com[@]}"
+    . "${script_dir}/executer.sh" "$@"
+else
+    echo "(*) Building and pushing Docker image with provenance and sbom attestations..." >&2
     if ! . "${script_dir}/login.sh" "${REGISTRY_USER:-${REPO_NAMESPACE}}" "${REPO_NAME:-${IMAGE_NAME}}"; then
         echo "Error: Not logged in to ${REGISTRY_PROVIDER} Container Registry." >&2
         exit 1
@@ -177,24 +187,26 @@ if [ "${BUILDX_PUSH:-true}" = "true" ]; then
         exit 1
     fi
     IMAGE_VERSION="${IMAGE_VERSION:-latest}"
-    docker_tag="${build_tag}"
-    if [ "$IMAGE_VERSION" != "latest" ]; then
-        docker_tag="${docker_tag}-${IMAGE_VERSION}"
-    else
-        docker_tag="${build_tag}"
-    fi
-    REGISTRY_URL="${REGISTRY_URL_PREFIX}/${docker_tag}"
+    # docker_tag="${build_tag}"
+    # if [ "$IMAGE_VERSION" != "latest" ]; then
+    #     docker_tag="${docker_tag}-${IMAGE_VERSION}"
+    # else
+    #     docker_tag="${build_tag}"
+    # fi
+    REGISTRY_URL="${REGISTRY_URL_PREFIX}/${build_tag}"
     push_com=(docker buildx build)
     push_com+=("-f" "${dockerfile_path}")
     push_com+=("--push")
     push_com+=("--provenance=mode=max")
     push_com+=("--sbom=true")
-    push_com+=("--cache-from" "${build_tag}")
+    push_com+=("--cache-from" "type=registry,ref=${REGISTRY_URL}")
+    push_com+=("--cache-to" "type=inline")
     push_com+=("--target" "${DOCKER_TARGET}")
     push_com+=("-t" "${REGISTRY_URL}")
-    if [ -n "${latest_tag-}" ]; then
-        push_com+=("-t" "${REGISTRY_URL_PREFIX}/${latest_tag}")
-    fi
+    [ -z "${major_version_tag-}" ] || push_com+=("-t" "${REGISTRY_URL_PREFIX}/${major_version_tag}")
+    [ -z "${version_tag-}" ] || push_com+=("-t" "${REGISTRY_URL_PREFIX}/${version_tag}")
+    [ -z "${unstable_tag-}" ] || push_com+=("-t" "${REGISTRY_URL_PREFIX}/${unstable_tag}")
+    [ -z "${latest_tag-}" ] || push_com+=("-t" "${REGISTRY_URL_PREFIX}/${latest_tag}")
     push_com+=("--platform=$(dedupe "${PLATFORM:-$DEFAULT_PLATFORM}")")
     push_com+=("${com_arg[@]}")
     push_com+=("$BUILD_CONTEXT")

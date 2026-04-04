@@ -86,13 +86,16 @@ fi
 
 tag_variant=$(echo "$TAG_PREFIX" | cut -d- -f2-)
 
-if [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
-    latest_tag="${IMAGE_NAME}:latest"
-    # build_tag="$LATEST_TAG"
-elif [ "$BASE_IMAGE_NAME" = "$DEFAULT_BASE_IMAGE_NAME" ] && [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" != "true" ]; then
+if [ "$BASE_IMAGE_NAME" = "$DEFAULT_BASE_IMAGE_NAME" ] && [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" != "true" ]; then
     if [ "$tag_variant" != "ext" ] && [ "$tag_variant" != "perf" ]; then
         version_tag="${IMAGE_NAME}:${TAG_PREFIX}"
+        major_version_tag="${IMAGE_NAME}:${TAG_PREFIX%%.*}"
     fi
+elif [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${UNSTABLE:-false}" = "true" ]; then
+    unstable_tag="${IMAGE_NAME}:unstable"
+elif [ "$DOCKER_TARGET" = "$DEFAULT_TARGET" ] && [ "${LATEST:-false}" = "true" ]; then
+    latest_tag="${IMAGE_NAME}:latest"
+    # build_tag="$LATEST_TAG"
 fi
 
 docker_tag="$build_tag"
@@ -121,6 +124,18 @@ build_date() {
     (
         set -x
         docker inspect -f '{{.Created}}' "$(docker images --no-trunc -q -f reference="$1")"
+    )
+    echo -e "\033[2m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\033[0m" >&2
+}
+
+tag_image() {
+    local source_image="$1"
+    local target_image="$2"
+    echo "(+) Preparing Docker image for ${REGISTRY_PROVIDER} Container Registry..." >&2
+    echo "(*) Tagging Docker image '${source_image}' as '${target_image}'..." >&2
+    (
+        set -x
+        docker tag "$source_image" "$target_image"
     )
     echo -e "\033[2m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\033[0m" >&2
 }
@@ -176,10 +191,21 @@ if [ "${BUILDX_PUSH:-true}" != "true" ]; then
     set -- "${com[@]}"
     . "${script_dir}/executer.sh" "$@"
 
-    if [ -n "${latest_tag-}" ]; then
-        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${latest_tag}"
+    if [ -n "${version_tag-}" ]; then
+        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${version_tag}"
 
-        echo "(*) Tagging with 'latest'..." >&2
+        echo "(*) Tagging with version tag '${version_tag-}'..." >&2
+        tag_image "$version_tag" "$REGISTRY_URL"
+
+        com=(docker push)
+        com+=("$REGISTRY_URL")
+
+        set -- "${com[@]}"
+        . "${script_dir}/executer.sh" "$@"
+    elif [ -n "${unstable_tag-}" ]; then
+        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${unstable_tag}"
+
+        echo "(*) Tagging with 'unstable'..." >&2
         tag_image "$build_tag" "$REGISTRY_URL"
 
         com=(docker push)
@@ -187,11 +213,22 @@ if [ "${BUILDX_PUSH:-true}" != "true" ]; then
 
         set -- "${com[@]}"
         . "${script_dir}/executer.sh" "$@"
-    elif [ -n "${version_tag-}" ]; then
-        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${version_tag}"
+    elif [ -n "${latest_tag-}" ]; then
+        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${major_version_tag}"
 
-        echo "(*) Tagging with version tag '${version_tag-}'..." >&2
-        tag_image "$build_tag" "$REGISTRY_URL"
+        echo "(*) Tagging with major version tag '${major_version_tag-}'..." >&2
+        tag_image "$major_version_tag" "$REGISTRY_URL"
+
+        com=(docker push)
+        com+=("$REGISTRY_URL")
+
+        set -- "${com[@]}"
+        . "${script_dir}/executer.sh" "$@"
+
+        REGISTRY_URL="${REGISTRY_URL_PREFIX}/${latest_tag}"
+
+        echo "(*) Tagging with 'latest'..." >&2
+        tag_image "$latest_tag" "$REGISTRY_URL"
 
         com=(docker push)
         com+=("$REGISTRY_URL")
@@ -223,7 +260,9 @@ echo "(∫) Adding annotations to ${REGISTRY_URL} ..." >&2
 # https://github.com/opencontainers/image-spec/blob/main/annotations.md#pre-defined-annotation-keys
 com=(docker buildx imagetools create)
 com+=("-t" "${REGISTRY_URL}")
+[ -z "${major_version_tag-}" ] || com+=("-t" "${REGISTRY_URL_PREFIX}/${major_version_tag}")
 [ -z "${version_tag-}" ] || com+=("-t" "${REGISTRY_URL_PREFIX}/${version_tag}")
+[ -z "${unstable_tag-}" ] || com+=("-t" "${REGISTRY_URL_PREFIX}/${unstable_tag}")
 [ -z "${latest_tag-}" ] || com+=("-t" "${REGISTRY_URL_PREFIX}/${latest_tag}")
 # https://specs.opencontainers.org/image-spec/annotations/
 com+=("--annotation" "${annotation_prefix}org.opencontainers.image.description=${image_description//\\\`/\`}")

@@ -245,32 +245,37 @@ __rest_github_tags_paged() {
 
 # https://github.com/devcontainers/features/blob/main/src/python/install.sh
 __find_version_from_git_tags() {
-    _repository=$1
-    _requested_version=${2:-latest}
+    _repository="$1"
+    _requested_version="${2:-latest}"
     [ "${_requested_version}" != "none" ] || return
     _url="https://${GIT_SERVER:-github.com}/${_repository}"
-    _prefix=${3:-"tags/v"}
-    _separator=${4:-"."}
-    _last_part_optional=${5:-"false"}
+    _prefix="${3:-tags/v}"
+    _separator="${4:-.}"
+    _last_part_optional="${5:-false}"
+    _enable_pre_release="${ENABLE_PRE_RELEASE:-true}"
     if [ "$(echo "${_requested_version}" | grep -o "." | wc -l)" != "2" ]; then
         # escaped_separator=${_separator//./\\.}
         _escaped_separator=$(printf '%s\n' "$_separator" | sed "s/[][\.*^$(){}?+|/]/\\\&/g")
-        [ "${ENABLE_PRE_RELEASE:-false}" != "true" ] || _pre_release_pattern="${_pre_release_pattern:-acr}"
+        if [ "$_enable_pre_release" = "true" ]; then
+            _pre_release_pattern="${_pre_release_pattern:-a-z}"
+        fi
+        _last_part_base="${_escaped_separator}[0-9]+"
         if [ "${_last_part_optional}" = "true" ]; then
             _last_part="(${_escaped_separator}[0-9${_pre_release_pattern}]+)?"
         else
             _last_part="${_escaped_separator}[0-9${_pre_release_pattern}]+"
         fi
-        _regex="$(echo "$_prefix" | sed 's|\/|\\/|g')\\K[0-9]+${_escaped_separator}[0-9]+${_last_part}$"
+        _regex="$(echo "$_prefix" | sed 's|\/|\\/|g')\\K[0-9]+${_last_part_base}${_last_part}$"
+        _regex_stable="\\K[0-9]+${_last_part_base}${_last_part_base}$"
         _version_list="$(git ls-remote --tags "${_url}" | grep -oP "${_regex}" | sed "s|$_prefix||" | tr "${_separator}" "." | sort -ruV)"
-        if [ "${_requested_version}" = "latest" ] || [ "${_requested_version}" = "current" ] || [ "${_requested_version}" = "lts" ]; then
-            VERSION="$(echo "${_version_list}" | head -n 1)"
-        else
-            VERSION="$(echo "${_version_list}" | grep -E -m 1 "^$(printf '%s' "$_requested_version" | sed "s/[.[\*^$(){}?+|/]/\\\&/g")([\\.\\s]|$)")"
-        fi
+        case "${_requested_version}" in
+            latest) VERSION="$(echo "${_version_list}" | head -n 1)" ;;
+            current | stable | lts) VERSION="$(echo "${_version_list}" | grep -oP "${_regex_stable}" | head -n 1)" ;;
+            *) VERSION="$(echo "${_version_list}" | grep -E -m 1 "^$(printf '%s' "$_requested_version" | sed "s/[.[\*^$(){}?+|/]/\\\&/g")([\\.\\s]|$)")" ;;
+        esac
     fi
 
-    unset _repository _requested_version _url _prefix _separator _last_part_optional _escaped_separator _regex _version_list
+    unset _repository _requested_version _url _prefix _separator _last_part_optional _enable_pre_release _escaped_separator _pre_release_pattern _last_part_base _last_part _regex _regex_stable _version_list
 }
 
 __get_version_with_rest_api() {
