@@ -1,4 +1,4 @@
-# 🐳 Quick Reference
+# Quick Reference
 
 - **Maintained by**:<br>[Andrew Haller](https://github.com/andrewhaller)
 - **License**:<br>[MIT](https://github.com/stairwaytowonderland/cpython/blob/main/LICENSE)
@@ -41,27 +41,36 @@ Tags follow the format `<python-version>[-<variant(ext|perf)>][-<base-image-ref>
 
 # Quick reference (cont.)
 
-- **Source `Dockerfile`**:<br>[github.com/stairwaytowonderland/cpython/blob/main/docker/Dockerfile](https://github.com/stairwaytowonderland/cpython/blob/main/docker/Dockerfile)
-- **GitHub Repository**:<br>[github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
-- **Docker Hub**:<br>[stairwaytowonderland/cpython](https://hub.docker.com/r/stairwaytowonderland/cpython)
-
-# Supported Platforms
-
-- `linux/amd64`
-- `linux/arm64`
-
-# Base Images
-
+- **Source `Dockerfile`:**<br>[github.com/stairwaytowonderland/cpython/blob/main/docker/Dockerfile](https://github.com/stairwaytowonderland/cpython/blob/main/docker/Dockerfile)
+- **GitHub Repository:**<br>[github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
+- **Docker Hub:**<br>[stairwaytowonderland/cpython](https://hub.docker.com/r/stairwaytowonderland/cpython)
+- **Base Images:**<br>
 All images are built on top of Debian-based base images. The default base is `ubuntu:latest`.
 
-| Base Image | Variant                 |
-| ---------- | ----------------------- |
-| `dhi`      | `bookworm-debian12-dev` |
-| `ubuntu`   | `latest`                |
-| `debian`   | `bookworm-slim`         |
+  | Base Image | Variant                 |
+  | ---------- | ----------------------- |
+  | `dhi`      | `bookworm-debian12-dev` |
+  | `ubuntu`   | `latest`                |
+  | `debian`   | `bookworm-slim`         |
 
-> ℹ️ **Note**: The Dockerfile requires a Debian-based image. Other Debian-derived distributions may be used via the
-> `IMAGE_NAME` and `VARIANT` build arguments.
+  > ℹ️ **Note**: The `Dockerfile` requires a Debian-based image. Other Debian-derived distributions may be used via the
+  > `IMAGE_NAME` and `VARIANT` build arguments.
+- **Supported architectures:**<br>
+`linux/amd64`, `linux/arm64`
+- **Source of this description:**<br>
+[docs](https://github.com/stairwaytowonderland/cpython/tree/main/docs)
+
+# What is this project?
+
+A self-maintained Python  Docker image that builds [CPython](https://github.com/python/cpython) from source on top of a
+Debian-based (Debian or Ubuntu) base image. Designed for use as a lightweight, customizable Python runtime in
+container-based workflows.
+
+*Inspired by a personal desire for a production-grade, Ubuntu-based Python "**base**" image.*
+
+> 🌐 [github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
+
+![logo](https://raw.githubusercontent.com/stairwaytowonderland/cpython/refs/heads/main/docs/assets/beesmall.png)
 
 # How to use this image
 
@@ -173,20 +182,9 @@ a custom Debian 12 (Bookworm) base image maintained by [dhi.io](https://dhi.io),
 workflows. It provides a curated, dev-friendly foundation with common tooling pre-installed, making it well-suited for
 both development and CI environments.
 
-# What is this project?
-
-A self-maintained Python  Docker image that builds [CPython](https://github.com/python/cpython) from source on top of a
-Debian-based (Debian or Ubuntu) base image. Designed for use as a lightweight, customizable Python runtime in
-container-based workflows.
-
-*Inspired by a personal desire for a production-grade, Ubuntu-based Python "**base**" image.*
-
-> 🌐 [github.com/stairwaytowonderland/cpython](https://github.com/stairwaytowonderland/cpython)
-
-![logo](https://raw.githubusercontent.com/stairwaytowonderland/cpython/refs/heads/main/docs/assets/beesmall.png)
-
 # License
 
-This project is licensed under the **MIT License** — free to use, modify, and distribute with attribution.
+This project is licensed under the [GPL-3.0 License](https://opensource.org/license/gpl-3.0) — free to use, modify,
+and distribute with attribution and original copyright notices.
 
 See the [LICENSE](https://github.com/stairwaytowonderland/cpython/blob/main/LICENSE) file for the full license text.
