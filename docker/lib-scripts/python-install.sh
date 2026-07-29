@@ -2,7 +2,7 @@
 
 # Only check for errors (set -e)
 # Don't check for unset variables (set -u) since variables are set in Dockerfile
-# Pipepail (set -o pipefail) is not available in sh
+# Pipefail (set -o pipefail) is not available in sh
 set -e
 
 LEVEL='ƒ' $LOGGER "Installing Python utilities..."
