@@ -47,14 +47,15 @@ Tags follow the format `<python-version>[-<variant(ext|perf)>][-<base-image-ref>
 - **Base Images:**<br>
 All images are built on top of Debian-based base images. The default base is `ubuntu:latest`.
 
+  > ℹ️ **Note**: The `Dockerfile` requires a Debian-based image. Other Debian-derived distributions may be used via the
+  > `IMAGE_NAME` and `VARIANT` build arguments.
+
   | Base Image | Variant                 |
   | ---------- | ----------------------- |
   | `dhi`      | `bookworm-debian12-dev` |
   | `ubuntu`   | `latest`                |
   | `debian`   | `bookworm-slim`         |
 
-  > ℹ️ **Note**: The `Dockerfile` requires a Debian-based image. Other Debian-derived distributions may be used via the
-  > `IMAGE_NAME` and `VARIANT` build arguments.
 - **Supported architectures:**<br>
 `linux/amd64`, `linux/arm64`
 - **Source of this description:**<br>
