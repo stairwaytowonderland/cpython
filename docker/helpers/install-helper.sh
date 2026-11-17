@@ -389,18 +389,22 @@ __install_from_package() {
     }
 
     LEVEL='*' $LOGGER "Downloading from $DOWNLOAD_URL ..."
-    # (
-    #     set -x
-    #     curl -fsOSL "$DOWNLOAD_URL" \
-    #         && dpkg -i "${DOWNLOAD_URL##*/}" \
-    #         && rm -f "${DOWNLOAD_URL##*/}"
-    # )
-    (
-        set -x
-        wget -q "$DOWNLOAD_URL" \
-            && dpkg -i "${DOWNLOAD_URL##*/}" \
-            && rm -f "${DOWNLOAD_URL##*/}"
-    )
+
+    if command -v curl > /dev/null 2>&1; then
+        (
+            set -x
+            curl -fsOSL "$DOWNLOAD_URL" \
+                && dpkg -i "${DOWNLOAD_URL##*/}" \
+                && rm -f "${DOWNLOAD_URL##*/}"
+        )
+    else
+        (
+            set -x
+            wget -q "$DOWNLOAD_URL" --user-agent="Mozilla/5.0" \
+                && dpkg -i "${DOWNLOAD_URL##*/}" \
+                && rm -f "${DOWNLOAD_URL##*/}"
+        )
+    fi
 
     unset _file_ext
 }
