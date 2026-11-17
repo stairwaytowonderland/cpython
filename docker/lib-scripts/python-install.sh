@@ -236,7 +236,7 @@ __check_llvm_version() {
 
     if (
         set -x
-        wget -q --spider \
+        wget -q --user-agent="Mozilla/5.0" --spider \
             "https://apt.llvm.org/${1}/dists/llvm-toolchain-${1}-${2}/Release" \
             2> /dev/null
     ); then
@@ -294,7 +294,10 @@ install_llvm() {
             LEVEL='!' $LOGGER "LLVM ${_llvm_version} repository not found for '${_codename}'; using '${_resolved_codename}'..."
             _codename="${_resolved_codename}"
         fi
-        wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+        (
+            set -x
+            wget -q --user-agent="Mozilla/5.0" -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+        )
         echo "deb http://apt.llvm.org/${_codename}/ llvm-toolchain-${_codename}-${_llvm_version} main" \
             > "/etc/apt/sources.list.d/llvm-${_llvm_version}".list
 

@@ -267,7 +267,10 @@ __find_version_from_git_tags() {
         fi
         _regex="$(echo "$_prefix" | sed 's|\/|\\/|g')\\K[0-9]+${_last_part_base}${_last_part}$"
         _regex_stable="\\K[0-9]+${_last_part_base}${_last_part_base}$"
-        _version_list="$(git ls-remote --tags "${_url}" | grep -oP "${_regex}" | sed "s|$_prefix||" | tr "${_separator}" "." | sort -ruV)"
+        _version_list="$(
+            set -x
+            git -c http.userAgent="Mozilla/5.0" ls-remote --tags "${_url}" | grep -oP "${_regex}" | sed "s|$_prefix||" | tr "${_separator}" "." | sort -ruV
+        )"
         case "${_requested_version}" in
             latest) VERSION="$(echo "${_version_list}" | head -n 1)" ;;
             current | stable | lts) VERSION="$(echo "${_version_list}" | grep -oP "${_regex_stable}" | head -n 1)" ;;
@@ -370,8 +373,11 @@ __install_from_tarball() {
     (
         set -x
         _tmpfile="$(mktemp)"
-        wget -q -O "$_tmpfile" "$DOWNLOAD_URL" \
-            && tar -C "$INSTALL_PREFIX" -"xv${_tar_opts}f" "$_tmpfile"
+        (
+            set -x
+            wget -q --user-agent="Mozilla/5.0" -O "$_tmpfile" "$DOWNLOAD_URL" \
+                && tar -C "$INSTALL_PREFIX" -"xv${_tar_opts}f" "$_tmpfile"
+        )
         _rc=$?
         rm -f "$_tmpfile"
         [ $_rc -eq 0 ] || return $_rc
