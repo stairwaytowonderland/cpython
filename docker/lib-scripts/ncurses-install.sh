@@ -41,11 +41,39 @@ install_dependencies() {
 download_ncurses() {
     LEVEL='*' $LOGGER "Downloading ncurses (latest) from ${NCURSES_DOWNLOAD_URL}..."
 
-    NCURSES_DOWNLOAD_URL="https://invisible-island.net/archives/ncurses/current/ncurses.tar.gz"
+    # NCURSES_OFFICIAL_BASE="https://ftp.gnu.org/gnu/ncurses"
+    # NCURSES_DEV_BASE="https://invisible-island.net/archives/ncurses/current"
+    # NCURSES_MIRROR_BASE="https://invisible-mirror.net/archives/ncurses/current"
+
+    if _latest="$(determine_latest_ncurses "https://invisible-mirror.net/archives/ncurses/current")" && [ -n "$_latest" ]; then
+        NCURSES_DOWNLOAD_URL="https://invisible-mirror.net/archives/ncurses/current/ncurses.tar.gz"
+    else
+        _latest="$(determine_latest_ncurses "https://ftp.gnu.org/gnu/ncurses")"
+        NCURSES_DOWNLOAD_URL="https://ftp.gnu.org/gnu/ncurses/${_latest}"
+    fi
+
+    unset _latest
 
     cd /tmp
     __install_from_tarball "$NCURSES_DOWNLOAD_URL" "$PWD"
     DOWNLOAD_DIR="$(find "$PWD" -maxdepth 1 -type d -name 'ncurses-*' | head -n 1)"
+}
+
+determine_latest_ncurses() {
+    if [ "$1" = "https://ftp.gnu.org/gnu/ncurses" ]; then
+        _pattern='ncurses-[0-9]+\.[0-9]+\.tar\.gz'
+    else
+        _pattern='ncurses-[0-9]+\.[0-9]+-[0-9]{8}\.tgz'
+    fi
+
+    _latest=$(wget -qO- "${1}/" --user-agent="Mozilla/5.0" \
+        | grep -oE "$_pattern" \
+        | sort -V \
+        | tail -n 1)
+
+    [ -n "$_latest" ] || return 1
+    printf '%s\n' "$_latest"
+    unset _latest _pattern
 }
 
 install_ncurses() {
