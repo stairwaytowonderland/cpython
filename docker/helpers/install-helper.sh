@@ -268,15 +268,16 @@ __find_version_from_git_tags() {
         _regex="$(echo "$_prefix" | sed 's|\/|\\/|g')\\K[0-9]+${_last_part_base}${_last_part}$"
         _regex_stable="\\K[0-9]+${_last_part_base}${_last_part_base}$"
         _version_list=""
-        for _i in 1 2 3; do
+        # for _i in 1 2 3 4 5; do
+        while [ -z "$_version_list" ]; do
             _version_list=$(
                 set -x
                 timeout 5 git -c http.userAgent="Mozilla/5.0" ls-remote --tags "${_url}" | grep -oP "${_regex}" | sed "s|$_prefix||" | tr "${_separator}" "." | sort -ruV
             )
-            [ -z "$_version_list" ] || break
+            # [ -z "$_version_list" ] || break
             sleep 2
         done
-        unset _i
+        # unset _i
         case "${_requested_version}" in
             latest) VERSION="$(echo "${_version_list}" | head -n 1)" ;;
             current | stable | lts) VERSION="$(echo "${_version_list}" | grep -oP "${_regex_stable}" | head -n 1)" ;;
